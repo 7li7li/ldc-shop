@@ -13,7 +13,7 @@ export function SiteFooter() {
                         {t('footer.disclaimer')}
                     </p>
                 </div>
-                <a href="https://chatgpt.org.uk" target="_blank" rel="noreferrer" className="text-center text-xs md:text-left text-muted-foreground/60 hover:text-primary transition-colors duration-300">
+                <a href="https://shop.7li7li.com" target="_blank" rel="noreferrer" className="text-center text-xs md:text-left text-muted-foreground/60 hover:text-primary transition-colors duration-300">
                     {t('footer.poweredBy')}
                 </a>
             </div>
