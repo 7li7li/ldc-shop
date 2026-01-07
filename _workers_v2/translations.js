@@ -179,7 +179,7 @@ export const translations = {
   },
   "footer": {
     "disclaimer": "Built for Linux DO ecosystem. Not an official Linux DO service.",
-    "poweredBy": "Developed by 7li7li"
+    "poweredBy": "Developed by chatgpt.org.uk"
   },
   "language": {
     "switch": "Language",
