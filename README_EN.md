@@ -6,7 +6,8 @@
 
 A robust, serverless virtual goods shop built with **Next.js 16**, **Vercel Postgres**, **Shadcn UI**, and **Linux DO Connect**.
 
-> 💡 **Also available as Cloudflare Workers version:** [View deployment guide → `_workers_v2/README.md`](./_workers_v2/README.md)
+> 💡 **Also available as Cloudflare Workers version (Next.js + OpenNext + D1):** [View deployment guide → `_workers_next/README.md`](./_workers_next/README.md)
+> This is a full-stack Next.js implementation based on OpenNext adapter, running on Cloudflare Workers with D1 database, providing the same feature set as the Vercel version.
 
 ## ✨ Features
 - **Modern Stack**: Next.js 16 (App Router), Tailwind CSS, TypeScript.
@@ -14,26 +15,39 @@ A robust, serverless virtual goods shop built with **Next.js 16**, **Vercel Post
 - **Linux DO Integration**: Built-in OIDC login and EasyPay payments.
 - **Storefront Experience**:
     - 🔍 **Search & Categories**: Client-side search and category filters.
-    - 📢 **Announcement Banner**: Configurable homepage announcements.
+    - 📢 **Announcement Banner**: Configurable homepage announcements (supports scheduled start/end).
     - 📝 **Markdown Descriptions**: Rich product descriptions.
+    - 🔥 **Hot & Discounts**: Hot tag and original/discount price display.
     - ⭐ **Ratings & Reviews**: Verified buyers can rate and review.
     - 📦 **Stock & Sold Counters**: Real-time inventory and sales display.
     - 🚫 **Purchase Limits**: Limit purchases by paid order count.
 - **Orders & Delivery**:
     - ✅ **Payment Callback Verification**: Signature and amount checks.
     - 🎁 **Auto Delivery**: Card key delivery on payment; paid status retained if out of stock.
-    - 🔒 **Stock Reservation**: 1-minute hold after entering checkout to prevent oversell.
+    - 🔒 **Stock Reservation**: 5-minute hold after entering checkout to prevent oversell.
     - ⏱️ **Auto-Cancel**: Unpaid orders are cancelled after 5 minutes and stock is released.
     - 🧾 **Order Center**: Order list and details pages.
+    - 🔔 **Pending Order Alert**: Homepage banner reminds users of unpaid orders.
+    - 🔄 **Refund Requests**: Users can submit refund requests for admin review (supports client-side & server-side refund).
+    - 💳 **Payment QR**: Admins can generate payment links/QR codes for direct payments without requiring a product.
 - **Admin Console**:
     - 📊 **Sales Stats**: Today/week/month/total overview.
-    - 🧩 **Product Management**: Create/edit, enable/disable, reorder, purchase limits.
-    - 🗂️ **Card Inventory**: Bulk import and delete unused card keys.
-    - 💳 **Orders & Refunds**: Order view and two-step refund flow.
+    - ⚠️ **Low Stock Alerts**: Configurable threshold and warnings.
+    - 🧩 **Product Management**: Create/edit, enable/disable, reorder, purchase limits, hot tag, discount price.
+    - 🏷️ **Category Management**: CRUD categories with icons and ordering.
+    - 🗂️ **Card Inventory**: Bulk import (newline/comma) with de-duplication and delete unused card keys.
+    - 🧯 **Stock Self-Heal**: Handles legacy `is_used = NULL` that can cause false out-of-stock, and backfills it to `false`.
+    - 📦 **Total Stock Display**: Homepage shows "Available + Locked" stock to prevent perceived sell-outs.
+    - 💳 **Orders & Refunds**: Pagination/search/filters, order detail, mark paid/delivered/cancel, client-mode refund + optional server proxy.
+    - 🧹 **Order Cleanup**: Bulk select and bulk delete.
+    - ⭐ **Review Management**: Search and delete reviews.
+    - 📦 **Data Export**: Export orders/products/reviews/settings; full dump JSON + D1 SQL.
     - 📣 **Announcements**: Homepage announcement management.
+    - 🏷️ **Store Name**: Editable in admin and reflected in header/title.
 - **I18n & Theme**:
     - 🌐 **English/Chinese switcher**.
     - 🌓 **Light/Dark/System themes**.
+    - ⏱️ **Auto Update (Upstream Sync)**: GitHub Actions workflow included for Fork users to auto-sync upstream changes and trigger Vercel deploy.
 
 ## 🚀 One-Click Deploy
 
@@ -45,23 +59,47 @@ The database (Vercel Postgres) will be automatically provisioned and linked.
 
 ## ☁️ Cloudflare Workers Command Deploy
 
-See [`_workers_v2/README.md`](./_workers_v2/README.md) for Wrangler-based deployment and configuration steps.
+See [`_workers_next/README.md`](./_workers_next/README.md) for Wrangler-based deployment and configuration steps.
 
-## ⚠️ Important: Custom Domain Required
+## 💡 Recommendation: Custom Domain
 
-**Do NOT use the default Vercel domain (`*.vercel.app`) for production!**
+While the system supports active order status querying, for the best user experience (instant payment status updates), we still **recommend** binding a custom domain (e.g., `store.yourdomain.com`).
 
-Resulting from the shared nature of `vercel.app` domains, they are often flagged by firewalls or payment gateways as low-reputation. This will cause **Payment Callback (Notify) requests to be blocked**, leading to "Payment Success but Order Pending" issues.
+The shared `vercel.app` domain is sometimes flagged by firewalls or payment gateways, which might delay or block payment callbacks. Using a custom domain avoids these issues.
 
-**Solution:**
-After deployment, you MUST bind a **Custom Domain** (e.g., `store.yourdomain.com`) in the Vercel dashboard and use this domain for `NEXT_PUBLIC_APP_URL` and the payment gateway notification URL.
+## 🐳 Docker Deployment (Docker Compose)
 
-## ⚠️ Important: Refund WAF Issue
+> ⚠️ **Experimental**: Docker deployment has not been fully tested and may have unknown issues. **We recommend using Vercel deployment** for better stability.
 
-The Refund API of Linux DO Credit is strictly protected by Cloudflare WAF. Direct server-side requests may be blocked (403 Forbidden).
+If you have your own server (VPS/NAS), you can deploy simply with Docker:
 
-**Current Workaround:**
-This project uses a **Client-side API call** solution (via Form submission). When an admin clicks the "Refund" button, it opens a new tab and the browser directly calls the Linux DO Credit Refund API. After confirming success from the API response, the admin returns to the system and clicks "Mark Refunded" to update the order status.
+1.  Clone the repository:
+    ```bash
+    git clone https://github.com/chatgptuk/ldc-shop.git
+    cd ldc-shop
+    ```
+2.  Edit `docker-compose.yml` environment variables:
+    - This file starts a local PostgreSQL database by default.
+    - **Crucial**: Replace `OAUTH_CLIENT_ID`, `OAUTH_CLIENT_SECRET`, `MERCHANT_ID`, `MERCHANT_KEY` with your actual credentials.
+3.  Start the service:
+    ```bash
+    docker-compose up -d
+    ```
+4.  Visit `http://localhost:3000`.
+    - Database data is persisted in the local `./postgres-data` folder.
+
+## 🔄 How to Enable Auto Update
+
+If you forked this project, you can enable GitHub Actions to automatically sync the latest code from upstream (triggering a Vercel redeploy):
+
+1.  Go to your GitHub repository page.
+2.  Click the **Actions** tab.
+3.  Select **Upstream Sync** from the left sidebar.
+4.  Click the **Enable workflow** button.
+5.  (Optional) Click **Run workflow** to test it manually.
+
+Once enabled, the script will check for updates from `chatgptuk/ldc-shop:main` daily and merge them into your repository.
+
 
 ## ⚙️ Configuration Guide
 

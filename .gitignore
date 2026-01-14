@@ -40,4 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .wrangler
-_workers_v2/node_modules
+# database
+postgres-data/
+

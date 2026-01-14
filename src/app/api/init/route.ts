@@ -35,6 +35,7 @@ export async function GET() {
                 product_name TEXT NOT NULL,
                 amount DECIMAL(10, 2) NOT NULL,
                 email TEXT,
+                payee TEXT,
                 status TEXT DEFAULT 'pending',
                 trade_no TEXT,
                 card_key TEXT,
@@ -55,6 +56,7 @@ export async function GET() {
             ALTER TABLE products ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
             ALTER TABLE products ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
             ALTER TABLE products ADD COLUMN IF NOT EXISTS purchase_limit INTEGER;
+            ALTER TABLE orders ADD COLUMN IF NOT EXISTS payee TEXT;
             ALTER TABLE cards ADD COLUMN IF NOT EXISTS reserved_order_id TEXT;
             ALTER TABLE cards ADD COLUMN IF NOT EXISTS reserved_at TIMESTAMP;
         `);

@@ -1,4 +1,6 @@
-import { getActiveProducts, getSetting, getProductRating, getVisitorCount } from "@/lib/db/queries";
+import { getActiveProducts, getCategories, getProductRating, getVisitorCount, getUserPendingOrders } from "@/lib/db/queries";
+import { getActiveAnnouncement } from "@/actions/settings";
+import { auth } from "@/lib/auth";
 import { HomeContent } from "@/components/home-content";
 
 export const dynamic = 'force-dynamic';
@@ -26,8 +28,10 @@ export default async function Home() {
           name TEXT NOT NULL,
           description TEXT,
           price DECIMAL(10, 2) NOT NULL,
+          compare_at_price DECIMAL(10, 2),
           category TEXT,
           image TEXT,
+          is_hot BOOLEAN DEFAULT FALSE,
           is_active BOOLEAN DEFAULT TRUE,
           sort_order INTEGER DEFAULT 0,
           purchase_limit INTEGER,
@@ -49,6 +53,7 @@ export default async function Home() {
           product_name TEXT NOT NULL,
           amount DECIMAL(10, 2) NOT NULL,
           email TEXT,
+          payee TEXT,
           status TEXT DEFAULT 'pending',
           trade_no TEXT,
           card_key TEXT,
@@ -68,14 +73,33 @@ export default async function Home() {
         ALTER TABLE products ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
         ALTER TABLE products ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
         ALTER TABLE products ADD COLUMN IF NOT EXISTS purchase_limit INTEGER;
+        ALTER TABLE products ADD COLUMN IF NOT EXISTS compare_at_price DECIMAL(10, 2);
+        ALTER TABLE products ADD COLUMN IF NOT EXISTS is_hot BOOLEAN DEFAULT FALSE;
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS payee TEXT;
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS points_used INTEGER DEFAULT 0;
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS quantity INTEGER DEFAULT 1 NOT NULL;
+        ALTER TABLE orders ADD COLUMN IF NOT EXISTS current_payment_id TEXT;
         ALTER TABLE cards ADD COLUMN IF NOT EXISTS reserved_order_id TEXT;
         ALTER TABLE cards ADD COLUMN IF NOT EXISTS reserved_at TIMESTAMP;
+        ALTER TABLE cards ALTER COLUMN is_used SET DEFAULT FALSE;
+        UPDATE cards SET is_used = FALSE WHERE is_used IS NULL;
+        CREATE UNIQUE INDEX IF NOT EXISTS cards_product_id_card_key_uq ON cards(product_id, card_key);
         -- Settings table for announcements
         CREATE TABLE IF NOT EXISTS settings (
           key TEXT PRIMARY KEY,
           value TEXT,
           updated_at TIMESTAMP DEFAULT NOW()
         );
+        -- Categories table
+        CREATE TABLE IF NOT EXISTS categories (
+          id SERIAL PRIMARY KEY,
+          name TEXT NOT NULL,
+          icon TEXT,
+          sort_order INTEGER DEFAULT 0,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS categories_name_uq ON categories(name);
         -- Reviews table
         CREATE TABLE IF NOT EXISTS reviews (
           id SERIAL PRIMARY KEY,
@@ -87,6 +111,20 @@ export default async function Home() {
           comment TEXT,
           created_at TIMESTAMP DEFAULT NOW()
         );
+        -- Refund requests
+        CREATE TABLE IF NOT EXISTS refund_requests (
+          id SERIAL PRIMARY KEY,
+          order_id TEXT NOT NULL,
+          user_id TEXT,
+          username TEXT,
+          reason TEXT,
+          status TEXT DEFAULT 'pending',
+          admin_username TEXT,
+          admin_note TEXT,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW(),
+          processed_at TIMESTAMP
+        );
       `);
 
       products = await getActiveProducts();
@@ -95,13 +133,7 @@ export default async function Home() {
     }
   }
 
-  // Fetch announcement (with error handling for new databases)
-  let announcement: string | null = null;
-  try {
-    announcement = await getSetting('announcement');
-  } catch {
-    // Settings table might not exist yet
-  }
+  const announcement = await getActiveAnnouncement();
 
   // Fetch ratings for each product
   const productsWithRatings = await Promise.all(
@@ -114,7 +146,7 @@ export default async function Home() {
       }
       return {
         ...p,
-        stockCount: p.stock,
+        stockCount: p.stock + (p.locked || 0),
         soldCount: p.sold || 0,
         rating: rating.average,
         reviewCount: rating.count
@@ -129,9 +161,29 @@ export default async function Home() {
     visitorCount = 0;
   }
 
+  let categories: any[] = []
+  try {
+    categories = await getCategories()
+  } catch {
+    categories = []
+  }
+
+  // Check for pending orders
+  const session = await auth();
+  let pendingOrders: any[] = [];
+  if (session?.user?.id) {
+    try {
+      pendingOrders = await getUserPendingOrders(session.user.id);
+    } catch {
+      // Ignore errors fetching pending orders
+    }
+  }
+
   return <HomeContent
     products={productsWithRatings}
     announcement={announcement}
     visitorCount={visitorCount}
+    categories={categories}
+    pendingOrders={pendingOrders}
   />;
 }

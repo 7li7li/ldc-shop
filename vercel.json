@@ -1,5 +1,5 @@
 {
-    "buildCommand": "next build",
+    "buildCommand": "drizzle-kit push && next build",
     "devCommand": "next dev",
     "installCommand": "npm install",
     "framework": "nextjs"
