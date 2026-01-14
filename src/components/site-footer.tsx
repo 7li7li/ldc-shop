@@ -14,7 +14,7 @@ export function SiteFooter() {
                     </p>
                 </div>
                 <a href="https://7li7li.com" target="_blank" rel="noreferrer" className="text-center text-xs md:text-left text-muted-foreground/60 hover:text-primary transition-colors duration-300">
-                    {t('footer.poweredBy')}
+                    ©7li7li
                 </a>
                 <a href="https://7li7li.com" target="_blank" rel="noreferrer" className="text-center text-xs text-muted-foreground/40 hover:text-primary transition-colors duration-300">
                     v0.2.3
