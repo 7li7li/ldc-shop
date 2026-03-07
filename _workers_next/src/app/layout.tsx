@@ -10,8 +10,9 @@ import { getSetting } from "@/lib/db/queries";
 import { Suspense } from "react";
 import { detectServerLocale } from "@/lib/i18n/server";
 import type { Locale } from "@/lib/i18n/shared";
+import { DEFAULT_MONO_FONT_STACK, getThemeFontStack } from "@/lib/theme-fonts";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 const DEFAULT_TITLE = "LDC Virtual Goods Shop";
 const DEFAULT_DESCRIPTION = "High-quality virtual goods, instant delivery";
@@ -93,22 +94,27 @@ async function RootLayoutContent({
   children: React.ReactNode;
 }>) {
   let themeColor: string | null = null;
+  let themeFont: string | null = null;
   let initialLocale: Locale = "en";
   try {
-    const [resolvedThemeColor, resolvedLocale] = await Promise.all([
+    const [resolvedThemeColor, resolvedThemeFont, resolvedLocale] = await Promise.all([
       getSetting("theme_color"),
+      getSetting("theme_font"),
       detectServerLocale(),
     ]);
     themeColor = resolvedThemeColor;
+    themeFont = resolvedThemeFont;
     initialLocale = resolvedLocale;
   } catch {
     themeColor = null;
+    themeFont = null;
     initialLocale = "en";
   }
   const themeHue = THEME_HUES[themeColor || "purple"] || 270;
   const themeChroma = THEME_CHROMA[themeColor || "purple"] ?? 1;
   const themePrimaryL = THEME_PRIMARY_L[themeColor || "purple"] ?? 0.45;
   const themePrimaryDarkL = THEME_PRIMARY_DARK_L[themeColor || "purple"] ?? 0.7;
+  const themeFontStack = getThemeFontStack(themeFont);
 
   return (
     <html
@@ -119,6 +125,8 @@ async function RootLayoutContent({
         ["--theme-chroma" as any]: themeChroma,
         ["--theme-primary-l" as any]: themePrimaryL,
         ["--theme-primary-dark-l" as any]: themePrimaryDarkL,
+        ["--app-font-sans" as any]: themeFontStack,
+        ["--app-font-mono" as any]: DEFAULT_MONO_FONT_STACK,
       }}
     >
       <head>
@@ -129,7 +137,7 @@ async function RootLayoutContent({
           }}
         />
       </head>
-      <body className={cn("min-h-screen bg-background font-sans antialiased", inter.className)}>
+      <body className={cn("min-h-screen bg-background font-sans antialiased", inter.variable)}>
         <Providers themeColor={themeColor} initialLocale={initialLocale}>
           <div className="relative flex min-h-screen flex-col">
             <SiteHeader />
@@ -146,7 +154,7 @@ async function RootLayoutContent({
 function RootLayoutFallback() {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={cn("min-h-screen bg-background font-sans antialiased", inter.className)}>
+      <body className={cn("min-h-screen bg-background font-sans antialiased", inter.variable)}>
         <div className="relative flex min-h-screen flex-col">
           <div className="h-16 border-b border-border/40 bg-background/70" />
           <div className="flex-1" />

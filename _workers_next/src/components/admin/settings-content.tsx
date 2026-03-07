@@ -3,6 +3,7 @@
 import { type ChangeEvent, useRef, useState } from "react"
 import { useI18n } from "@/lib/i18n/context"
 import { prepareUploadedImage } from "@/lib/client-image"
+import { DEFAULT_THEME_FONT, getThemeFontStack, THEME_FONT_VALUES, type ThemeFont } from "@/lib/theme-fonts"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { TrendingUp, ShoppingCart, CreditCard, Package, Users } from "lucide-react"
-import { saveShopName, saveShopDescription, saveShopLogo, saveShopFooter, saveThemeColor, saveLowStockThreshold, saveCheckinReward, saveCheckinEnabled, saveWishlistEnabled, saveNoIndex, saveRefundReclaimCards, saveRegistryHideNav } from "@/actions/admin"
+import { saveShopName, saveShopDescription, saveShopLogo, saveShopFooter, saveThemeColor, saveThemeFont, saveLowStockThreshold, saveCheckinReward, saveCheckinEnabled, saveWishlistEnabled, saveNoIndex, saveRefundReclaimCards, saveRegistryHideNav } from "@/actions/admin"
 import { joinRegistry, leaveRegistry } from "@/actions/registry"
 import { checkForUpdatesClient, type ClientUpdateCheckResult } from "@/lib/update-check-client"
 import { toast } from "sonner"
@@ -29,6 +30,7 @@ interface AdminSettingsContentProps {
     shopLogo: string | null
     shopFooter: string | null
     themeColor: string | null
+    themeFont: string | null
     visitorCount: number
     lowStockThreshold: number
     checkinReward: number
@@ -62,7 +64,7 @@ const THEME_COLORS = [
 
 const SHOP_LOGO_UPLOAD_MAX_BYTES = 500 * 1024
 
-export function AdminSettingsContent({ stats, shopName, shopDescription, shopLogo, shopFooter, themeColor, visitorCount, lowStockThreshold, checkinReward, checkinEnabled, wishlistEnabled, noIndexEnabled, refundReclaimCards, registryHideNav, registryOptIn, registryEnabled, currentVersion }: AdminSettingsContentProps) {
+export function AdminSettingsContent({ stats, shopName, shopDescription, shopLogo, shopFooter, themeColor, themeFont, visitorCount, lowStockThreshold, checkinReward, checkinEnabled, wishlistEnabled, noIndexEnabled, refundReclaimCards, registryHideNav, registryOptIn, registryEnabled, currentVersion }: AdminSettingsContentProps) {
     const { t } = useI18n()
     const shopLogoFileInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -77,6 +79,8 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, shopLog
     const [savingShopFooter, setSavingShopFooter] = useState(false)
     const [selectedTheme, setSelectedTheme] = useState(themeColor || 'purple')
     const [savingTheme, setSavingTheme] = useState(false)
+    const [selectedThemeFont, setSelectedThemeFont] = useState<ThemeFont>((themeFont as ThemeFont) || DEFAULT_THEME_FONT)
+    const [savingThemeFont, setSavingThemeFont] = useState(false)
     const [thresholdValue, setThresholdValue] = useState(String(lowStockThreshold || 5))
     const [savingThreshold, setSavingThreshold] = useState(false)
     const [rewardValue, setRewardValue] = useState(String(checkinReward || 10))
@@ -287,6 +291,20 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, shopLog
             toast.error(e.message)
         } finally {
             setSavingTheme(false)
+        }
+    }
+
+    const handleSaveThemeFont = async (font: ThemeFont) => {
+        setSavingThemeFont(true)
+        setSelectedThemeFont(font)
+        try {
+            await saveThemeFont(font)
+            toast.success(t('common.success'))
+            window.location.reload()
+        } catch (e: any) {
+            toast.error(e.message)
+        } finally {
+            setSavingThemeFont(false)
         }
     }
 
@@ -627,6 +645,45 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, shopLog
                     <p className="text-xs text-muted-foreground">
                         {t(`admin.settings.themeColor.${selectedTheme}`)}
                     </p>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>{t('admin.settings.themeFont.title')}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground">{t('admin.settings.themeFont.hint')}</p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        {THEME_FONT_VALUES.map((value) => {
+                            const active = selectedThemeFont === value
+                            return (
+                                <button
+                                    key={value}
+                                    type="button"
+                                    onClick={() => handleSaveThemeFont(value)}
+                                    disabled={savingThemeFont}
+                                    className={[
+                                        "rounded-xl border p-4 text-left transition-all",
+                                        active ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "border-border/60 hover:border-primary/40 hover:bg-muted/30",
+                                        savingThemeFont ? "cursor-not-allowed opacity-60" : "cursor-pointer",
+                                    ].join(' ')}
+                                >
+                                    <div className="flex items-center justify-between gap-3">
+                                        <span className="text-sm font-semibold">{t(`admin.settings.themeFont.${value}`)}</span>
+                                        {active && <span className="inline-block h-2.5 w-2.5 rounded-full bg-primary" />}
+                                    </div>
+                                    <p
+                                        className="mt-3 text-xl text-foreground"
+                                        style={{ fontFamily: getThemeFontStack(value) }}
+                                    >
+                                        Ag 你好 字体
+                                    </p>
+                                </button>
+                            )
+                        })}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{t(`admin.settings.themeFont.${selectedThemeFont}`)}</p>
                 </CardContent>
             </Card>
 

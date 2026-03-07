@@ -317,6 +317,14 @@
                 "rose": "玫瑰",
                 "pink": "粉色"
             },
+            "themeFont": {
+                "title": "全局字体",
+                "hint": "选择商店前台和后台共用的主字体风格。",
+                "inter": "现代无衬线",
+                "system": "系统默认",
+                "rounded": "圆润无衬线",
+                "serif": "衬线阅读"
+            },
             "notifications": {
                 "title": "通知设置",
                 "featureTitle": "管理员实时通知",
@@ -522,7 +530,7 @@
             "cardKey": "卡密",
             "date": "日期",
             "actions": "操作",
-            "searchPlaceholder": "搜索订单 / 用户 / 邮箱 / 商品 / 交易号...",
+            "searchPlaceholder": "搜索订单号 / 用户 / 邮箱 / 商品 / 交易号 / 卡密...",
             "showing": "显示 {{from}}-{{to}} / 共 {{total}}",
             "clearFilters": "清空",
             "search": "搜索",

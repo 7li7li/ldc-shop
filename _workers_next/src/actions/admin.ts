@@ -10,6 +10,7 @@ import { setSetting, getSetting, recalcProductAggregates, recalcProductAggregate
 import { isAdminUsername } from "@/lib/admin-auth"
 import { getProductCardApiConfig, pullOneCardFromApi, saveProductCardApiConfig } from "@/lib/card-api"
 import { unstable_noStore } from "next/cache"
+import { isThemeFont } from "@/lib/theme-fonts"
 
 export async function checkAdmin() {
     const session = await auth()
@@ -668,6 +669,20 @@ export async function saveThemeColor(color: string) {
     }
 
     await setSetting('theme_color', color)
+    revalidatePath('/admin/settings')
+    revalidatePath('/')
+    updateTag('home:products')
+    updateTag('home:product-categories')
+}
+
+export async function saveThemeFont(font: string) {
+    await checkAdmin()
+
+    if (!isThemeFont(font)) {
+        throw new Error("Invalid theme font")
+    }
+
+    await setSetting('theme_font', font)
     revalidatePath('/admin/settings')
     revalidatePath('/')
     updateTag('home:products')

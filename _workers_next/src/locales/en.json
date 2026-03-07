@@ -317,6 +317,14 @@
                 "rose": "Rose",
                 "pink": "Pink"
             },
+            "themeFont": {
+                "title": "Global Font",
+                "hint": "Choose the main font style shared by both the storefront and admin area.",
+                "inter": "Modern Sans",
+                "system": "System Default",
+                "rounded": "Rounded Sans",
+                "serif": "Reading Serif"
+            },
             "notifications": {
                 "title": "Notification Settings",
                 "featureTitle": "Real-time Admin Notifications",
@@ -522,7 +530,7 @@
             "cardKey": "Card Key",
             "date": "Date",
             "actions": "Actions",
-            "searchPlaceholder": "Search by order / user / email / product / trade...",
+            "searchPlaceholder": "Search by order id / user / email / product / trade / card key...",
             "showing": "Showing {{from}}-{{to}} of {{total}}",
             "clearFilters": "Clear",
             "search": "Search",
