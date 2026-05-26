@@ -98,10 +98,10 @@ const getDb = () => {
 
     // 2. Local fallback (Sync)
     try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { createClient } = require('@libsql/client');
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { drizzle: drizzleLibsql } = require('drizzle-orm/libsql');
+        // Hide local-only dependencies from the Cloudflare Worker bundler.
+        const runtimeRequire = eval('require') as NodeRequire;
+        const { createClient } = runtimeRequire('@libsql/client');
+        const { drizzle: drizzleLibsql } = runtimeRequire('drizzle-orm/libsql');
         const client = createClient({ url: `file:${process.env.LOCAL_DB_PATH || 'local.sqlite'}` });
         return drizzleLibsql(client, { schema });
     } catch (e) {
