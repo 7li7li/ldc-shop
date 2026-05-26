@@ -146,7 +146,7 @@ export function HomeContent({ products, announcement, visitorCount, categories =
                 <div className="flex items-center justify-between">
                     {typeof visitorCount === 'number' && (
                         <Badge variant="secondary" className="px-3 py-1 bg-background/70 shadow-sm border border-border/40">
-                            {t('home.visitorCount', { count: visitorCount })}
+                            {visitorCount}
                         </Badge>
                     )}
                     {wishlistEnabled && (

@@ -83,6 +83,7 @@
         "checkBackLater": "Check back later!",
         "visitorCount": "Total Visitors: {{count}}",
         "customerService": "Contact Support",
+        "customerServiceShort": "DM",
         "pendingOrder": {
             "single": "You have 1 unpaid order: {{orderId}}",
             "multiple": "You have {{count}} unpaid orders",

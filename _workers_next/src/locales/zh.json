@@ -83,6 +83,7 @@
         "checkBackLater": "请稍后再来！",
         "visitorCount": "累计访客数：{{count}}",
         "customerService": "联系客服",
+        "customerServiceShort": "私信",
         "pendingOrder": {
             "single": "您有一笔待支付订单：{{orderId}}",
             "multiple": "您有 {{count}} 笔待支付订单",

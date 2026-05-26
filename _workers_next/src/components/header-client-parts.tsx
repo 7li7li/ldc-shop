@@ -120,9 +120,10 @@ export function HeaderQuickActions({
                     rel="noopener noreferrer"
                     aria-label={t('home.customerService')}
                     title={t('home.customerService')}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 hover:bg-background/70 hover:text-primary"
+                    className="inline-flex h-8 items-center gap-1.5 justify-center rounded-full px-2.5 text-xs font-medium text-muted-foreground transition-colors duration-200 hover:bg-background/70 hover:text-primary"
                 >
                     <img src={customerServiceIconSrc || ''} alt="" className="h-4 w-4 object-contain" />
+                    <span>{t('home.customerServiceShort')}</span>
                 </a>
             )}
             {wishlistEnabled && (
@@ -133,7 +134,6 @@ export function HeaderQuickActions({
                     className="inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium text-muted-foreground transition-colors duration-200 hover:bg-background/70 hover:text-primary"
                 >
                     <Heart className="h-3.5 w-3.5" />
-                    <span className="hidden lg:inline">{t('wishlist.title')}</span>
                 </Link>
             )}
             {typeof visitorCount === "number" && (
@@ -143,7 +143,6 @@ export function HeaderQuickActions({
                 >
                     <Users className="h-3.5 w-3.5 text-primary" />
                     <span className="font-semibold tabular-nums text-foreground">{visitorCount}</span>
-                    <span className="hidden xl:inline">{t('home.metrics.visitors')}</span>
                 </div>
             )}
         </div>

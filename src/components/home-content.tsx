@@ -147,7 +147,7 @@ export function HomeContent({ products, announcement, visitorCount, categories: 
                 <div className="flex items-center justify-between">
                     {typeof visitorCount === 'number' && (
                         <Badge variant="secondary" className="px-3 py-1">
-                            {t('home.visitorCount', { count: visitorCount })}
+                            {visitorCount}
                         </Badge>
                     )}
                 </div>

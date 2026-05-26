@@ -18,7 +18,6 @@ export function LanguageSwitcher() {
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" className="gap-1" title={t('language.switch')} aria-label={t('language.switch')}>
                     <Languages className="h-4 w-4" />
-                    <span className="hidden sm:inline">{locale === 'zh' ? '中文' : 'EN'}</span>
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
