@@ -3,7 +3,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { ArrowRight, Heart, Search, Sparkles, Users } from "lucide-react"
+import { ArrowRight, Search, Sparkles } from "lucide-react"
 import { ProductImagePlaceholder } from "@/components/product-image-placeholder"
 import { AnnouncementPopup } from "@/components/announcement-popup"
 import { CardContent } from "@/components/ui/card"
@@ -48,17 +48,17 @@ interface HomeContentProps {
             signature: string
         } | null
     } | null
-    visitorCount?: number
     categories?: string[]
     categoryConfig?: Array<{ name: string; icon: string | null; sortOrder: number }>
     pendingOrders?: Array<{ orderId: string; createdAt: Date; productName: string; amount: string }>
-    wishlistEnabled?: boolean
     isLoggedIn?: boolean
     checkinEnabled?: boolean
     pointsPurchaseEnabled?: boolean
     pointsPurchaseRate?: number
     homeTitle?: string | null
     homeSubtitle?: string | null
+    customerServiceUrl?: string | null
+    customerServiceSvg?: string | null
     filters: { q?: string; category?: string | null; sort?: string }
     pagination: { page: number; pageSize: number; total: number }
 }
@@ -66,17 +66,17 @@ interface HomeContentProps {
 export function HomeContent({
     products,
     announcement,
-    visitorCount,
     categories = [],
     categoryConfig,
     pendingOrders,
-    wishlistEnabled = false,
     isLoggedIn = false,
     checkinEnabled = true,
     pointsPurchaseEnabled = false,
     pointsPurchaseRate = 1,
     homeTitle,
     homeSubtitle,
+    customerServiceUrl,
+    customerServiceSvg,
     filters,
     pagination,
 }: HomeContentProps) {
@@ -129,6 +129,13 @@ export function HomeContent({
     const hasPendingOrders = Boolean(pendingOrders && pendingOrders.length > 0)
     const displayHomeTitle = homeTitle?.trim() || t("home.title")
     const displayHomeSubtitle = homeSubtitle?.trim() || t("home.subtitle")
+    const customerServiceHref = customerServiceUrl?.trim()
+    const customerServiceIconSrc = useMemo(() => {
+        const svg = customerServiceSvg?.trim()
+        if (!svg) return null
+        return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+    }, [customerServiceSvg])
+    const showCustomerService = Boolean(customerServiceHref && customerServiceIconSrc)
     const sortOptions = [
         { key: "default", label: t("home.sort.default") },
         { key: "stockDesc", label: t("home.sort.stock") },
@@ -158,6 +165,14 @@ export function HomeContent({
                             </p>
                         </div>
                         <div className="flex w-full flex-col items-stretch gap-2 md:w-auto md:flex-row md:items-center md:justify-end md:gap-3">
+                            {showCustomerService && (
+                                <Button asChild variant="outline" className="h-10 rounded-2xl border-border/50 bg-background/70 px-4 shadow-none">
+                                    <a href={customerServiceHref} target="_blank" rel="noopener noreferrer">
+                                        <img src={customerServiceIconSrc || ''} alt="" className="h-4 w-4 object-contain" />
+                                        {t("home.customerService")}
+                                    </a>
+                                </Button>
+                            )}
                             {isLoggedIn && (
                                 <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
                                     <CheckInButton
@@ -168,23 +183,6 @@ export function HomeContent({
                                     {pointsPurchaseEnabled && <PointsPurchaseButton rate={pointsPurchaseRate} />}
                                 </div>
                             )}
-                            <div className="flex flex-wrap items-center gap-2 md:gap-3">
-                                {typeof visitorCount === "number" && (
-                                    <div className="inline-flex items-center gap-2 rounded-full border border-border/40 bg-background/60 px-3.5 py-2 text-sm backdrop-blur-sm">
-                                        <Users className="h-3.5 w-3.5 text-primary" />
-                                        <span className="font-semibold tabular-nums text-foreground">{visitorCount}</span>
-                                        <span className="text-xs text-muted-foreground">{t("home.metrics.visitors")}</span>
-                                    </div>
-                                )}
-                                {wishlistEnabled && (
-                                    <Link href="/wishlist" className="inline-flex">
-                                        <Button variant="outline" className="h-10 rounded-2xl border-border/50 bg-background/70 px-4 shadow-none">
-                                            <Heart className="mr-2 h-4 w-4" />
-                                            {t("wishlist.title")}
-                                        </Button>
-                                    </Link>
-                                )}
-                            </div>
                         </div>
                     </div>
                 </div>

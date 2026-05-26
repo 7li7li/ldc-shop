@@ -9,6 +9,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { getMyUnreadCount } from "@/actions/user-notifications"
+import { Heart, Users } from "lucide-react"
 
 export function HeaderLogo({ adminName, shopNameOverride, shopLogoVersion }: { adminName?: string; shopNameOverride?: string | null; shopLogoVersion?: string | null }) {
     const { t } = useI18n()
@@ -85,6 +86,38 @@ export function HeaderSearch({ className }: { className?: string }) {
                 placeholder={t('search.placeholder')}
             />
         </form>
+    )
+}
+
+export function HeaderQuickActions({ wishlistEnabled, visitorCount }: { wishlistEnabled: boolean; visitorCount: number | null }) {
+    const { t } = useI18n()
+
+    if (!wishlistEnabled && typeof visitorCount !== "number") return null
+
+    return (
+        <div className="flex items-center gap-1">
+            {wishlistEnabled && (
+                <Link
+                    href="/wishlist"
+                    aria-label={t('wishlist.title')}
+                    title={t('wishlist.title')}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium text-muted-foreground transition-colors duration-200 hover:bg-background/70 hover:text-primary"
+                >
+                    <Heart className="h-3.5 w-3.5" />
+                    <span className="hidden lg:inline">{t('wishlist.title')}</span>
+                </Link>
+            )}
+            {typeof visitorCount === "number" && (
+                <div
+                    title={t('home.visitorCount', { count: visitorCount })}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium text-muted-foreground"
+                >
+                    <Users className="h-3.5 w-3.5 text-primary" />
+                    <span className="font-semibold tabular-nums text-foreground">{visitorCount}</span>
+                    <span className="hidden xl:inline">{t('home.metrics.visitors')}</span>
+                </div>
+            )}
+        </div>
     )
 }
 

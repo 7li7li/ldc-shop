@@ -22,6 +22,8 @@ export default async function AdminSettingsPage() {
     const shopDescription = settingsMap['shop_description'] || null
     const homeTitle = settingsMap['home_title'] || null
     const homeSubtitle = settingsMap['home_subtitle'] || null
+    const customerServiceUrl = settingsMap['customer_service_url'] || null
+    const customerServiceSvg = settingsMap['customer_service_svg'] || null
     const shopLogo = resolveEffectiveShopLogo(settingsMap['shop_logo'] || '', settingsMap['shop_logo_source'] || '').effectiveLogo || null
     const shopFooter = settingsMap['shop_footer'] || null
     const currencyUnit = settingsMap['currency_unit'] || null
@@ -46,6 +48,8 @@ export default async function AdminSettingsPage() {
             shopDescription={shopDescription}
             homeTitle={homeTitle}
             homeSubtitle={homeSubtitle}
+            customerServiceUrl={customerServiceUrl}
+            customerServiceSvg={customerServiceSvg}
             shopLogo={shopLogo}
             shopFooter={shopFooter}
             currencyUnit={currencyUnit}

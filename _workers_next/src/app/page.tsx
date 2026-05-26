@@ -1,4 +1,4 @@
-import { getActiveProductCategories, getCategories, getActiveProducts, getVisitorCount, getUserPendingOrders, getSetting, getLiveCardStats } from "@/lib/db/queries";
+import { getActiveProductCategories, getCategories, getActiveProducts, getUserPendingOrders, getSetting, getLiveCardStats } from "@/lib/db/queries";
 import { getActiveAnnouncement } from "@/actions/settings";
 import { auth } from "@/lib/auth";
 import { HomeContent } from "@/components/home-content";
@@ -32,19 +32,11 @@ export default async function Home({
   const trustLevel = Number.isFinite(Number(session?.user?.trustLevel)) ? Number(session?.user?.trustLevel) : 0
 
   // Run all independent queries in parallel for better performance
-  const [products, announcement, visitorCount, categoryConfig, productCategories, wishlistEnabled, checkinEnabled, pointsPurchaseEnabled, pointsPurchaseRate, homeTitle, homeSubtitle] = await Promise.all([
+  const [products, announcement, categoryConfig, productCategories, checkinEnabled, pointsPurchaseEnabled, pointsPurchaseRate, homeTitle, homeSubtitle, customerServiceUrl, customerServiceSvg] = await Promise.all([
     getActiveProducts({ isLoggedIn, trustLevel }).catch(() => []),
     getActiveAnnouncement().catch(() => null),
-    getVisitorCount().catch(() => 0),
     getCategories().catch(() => []),
     getActiveProductCategories({ isLoggedIn, trustLevel }).catch(() => []),
-    (async () => {
-      try {
-        return (await getSetting('wishlist_enabled')) === 'true'
-      } catch {
-        return false
-      }
-    })(),
     (async () => {
       try {
         return (await getSetting('checkin_enabled')) !== 'false'
@@ -68,7 +60,9 @@ export default async function Home({
       }
     })(),
     getSetting('home_title').catch(() => null),
-    getSetting('home_subtitle').catch(() => null)
+    getSetting('home_subtitle').catch(() => null),
+    getSetting('customer_service_url').catch(() => null),
+    getSetting('customer_service_svg').catch(() => null)
   ]);
 
 
@@ -133,17 +127,17 @@ export default async function Home({
   return <HomeContent
     products={productsWithRatings}
     announcement={announcement}
-    visitorCount={visitorCount}
     categories={categories}
     categoryConfig={categoryConfig}
     pendingOrders={pendingOrders}
-    wishlistEnabled={wishlistEnabled}
     isLoggedIn={isLoggedIn}
     checkinEnabled={checkinEnabled}
     pointsPurchaseEnabled={pointsPurchaseEnabled}
     pointsPurchaseRate={pointsPurchaseRate}
     homeTitle={homeTitle}
     homeSubtitle={homeSubtitle}
+    customerServiceUrl={customerServiceUrl}
+    customerServiceSvg={customerServiceSvg}
     filters={{ q, category: category || null, sort }}
     pagination={{ page, pageSize: PAGE_SIZE, total }}
   />;

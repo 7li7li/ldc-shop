@@ -608,6 +608,47 @@ export async function saveHomeIntro(rawTitle: string, rawSubtitle: string) {
     updateTag('home:product-categories')
 }
 
+export async function saveCustomerService(rawUrl: string, rawSvg: string) {
+    await checkAdmin()
+
+    const url = rawUrl.trim()
+    const svg = rawSvg.trim()
+
+    if (url) {
+        let parsed: URL
+        try {
+            parsed = new URL(url)
+        } catch {
+            throw new Error("Customer service URL is invalid")
+        }
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+            throw new Error("Customer service URL must start with http or https")
+        }
+        if (url.length > 500) {
+            throw new Error("Customer service URL is too long")
+        }
+    }
+
+    if (svg) {
+        if (svg.length > 12000) {
+            throw new Error("Customer service SVG is too long")
+        }
+        if (!svg.toLowerCase().startsWith("<svg") || !svg.toLowerCase().includes("</svg>")) {
+            throw new Error("Customer service icon must be SVG markup")
+        }
+        if (/<script\b|on\w+\s*=|javascript:/i.test(svg)) {
+            throw new Error("Customer service SVG contains unsafe markup")
+        }
+    }
+
+    await setSetting('customer_service_url', url)
+    await setSetting('customer_service_svg', svg)
+    revalidatePath('/')
+    revalidatePath('/admin/settings')
+    updateTag('home:products')
+    updateTag('home:product-categories')
+}
+
 export async function saveShopLogo(logoUrl: string) {
     await checkAdmin()
 

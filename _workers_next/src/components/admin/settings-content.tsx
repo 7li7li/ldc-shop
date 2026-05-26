@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { TrendingUp, ShoppingCart, CreditCard, Package, Users } from "lucide-react"
-import { saveShopName, saveShopDescription, saveHomeIntro, saveShopLogo, saveShopFooter, saveThemeColor, saveThemeFont, saveLowStockThreshold, saveCheckinReward, saveCheckinEnabled, saveWishlistEnabled, saveNoIndex, saveRefundReclaimCards, saveRegistryHideNav, saveCurrencyUnit, savePointsPurchaseSettings } from "@/actions/admin"
+import { saveShopName, saveShopDescription, saveHomeIntro, saveCustomerService, saveShopLogo, saveShopFooter, saveThemeColor, saveThemeFont, saveLowStockThreshold, saveCheckinReward, saveCheckinEnabled, saveWishlistEnabled, saveNoIndex, saveRefundReclaimCards, saveRegistryHideNav, saveCurrencyUnit, savePointsPurchaseSettings } from "@/actions/admin"
 import { joinRegistry, leaveRegistry } from "@/actions/registry"
 import { checkForUpdatesClient, type ClientUpdateCheckResult } from "@/lib/update-check-client"
 import { toast } from "sonner"
@@ -31,6 +31,8 @@ interface AdminSettingsContentProps {
     shopDescription: string | null
     homeTitle: string | null
     homeSubtitle: string | null
+    customerServiceUrl: string | null
+    customerServiceSvg: string | null
     shopLogo: string | null
     shopFooter: string | null
     currencyUnit: string | null
@@ -71,7 +73,7 @@ const THEME_COLORS = [
 
 const SHOP_LOGO_UPLOAD_MAX_BYTES = 500 * 1024
 
-export function AdminSettingsContent({ stats, shopName, shopDescription, homeTitle, homeSubtitle, shopLogo, shopFooter, currencyUnit, themeColor, themeFont, visitorCount, lowStockThreshold, checkinReward, checkinEnabled, pointsPurchaseEnabled, pointsPurchaseRate, wishlistEnabled, noIndexEnabled, refundReclaimCards, registryHideNav, registryOptIn, registryEnabled, currentVersion }: AdminSettingsContentProps) {
+export function AdminSettingsContent({ stats, shopName, shopDescription, homeTitle, homeSubtitle, customerServiceUrl, customerServiceSvg, shopLogo, shopFooter, currencyUnit, themeColor, themeFont, visitorCount, lowStockThreshold, checkinReward, checkinEnabled, pointsPurchaseEnabled, pointsPurchaseRate, wishlistEnabled, noIndexEnabled, refundReclaimCards, registryHideNav, registryOptIn, registryEnabled, currentVersion }: AdminSettingsContentProps) {
     const { t } = useI18n()
     const router = useRouter()
     const shopLogoFileInputRef = useRef<HTMLInputElement | null>(null)
@@ -84,6 +86,9 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, homeTit
     const [homeTitleValue, setHomeTitleValue] = useState(homeTitle || '')
     const [homeSubtitleValue, setHomeSubtitleValue] = useState(homeSubtitle || '')
     const [savingHomeIntro, setSavingHomeIntro] = useState(false)
+    const [customerServiceUrlValue, setCustomerServiceUrlValue] = useState(customerServiceUrl || '')
+    const [customerServiceSvgValue, setCustomerServiceSvgValue] = useState(customerServiceSvg || '')
+    const [savingCustomerService, setSavingCustomerService] = useState(false)
     const [shopLogoValue, setShopLogoValue] = useState(shopLogo || '')
     const [savingShopLogo, setSavingShopLogo] = useState(false)
     const [shopFooterValue, setShopFooterValue] = useState(shopFooter || '')
@@ -161,6 +166,21 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, homeTit
             toast.error(e.message)
         } finally {
             setSavingHomeIntro(false)
+        }
+    }
+
+    const handleSaveCustomerService = async () => {
+        setSavingCustomerService(true)
+        try {
+            await saveCustomerService(customerServiceUrlValue, customerServiceSvgValue)
+            setCustomerServiceUrlValue(customerServiceUrlValue.trim())
+            setCustomerServiceSvgValue(customerServiceSvgValue.trim())
+            router.refresh()
+            toast.success(t('common.success'))
+        } catch (e: any) {
+            toast.error(e.message)
+        } finally {
+            setSavingCustomerService(false)
         }
     }
 
@@ -538,6 +558,33 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, homeTit
                             <p className="text-xs text-muted-foreground">{t('admin.settings.homeIntroHint')}</p>
                             <Button variant="outline" onClick={handleSaveHomeIntro} disabled={savingHomeIntro}>
                                 {savingHomeIntro ? t('common.processing') : t('common.save')}
+                            </Button>
+                        </div>
+                    </div>
+                    <div className="grid gap-3 md:max-w-xl">
+                        <div className="grid gap-2">
+                            <Label htmlFor="customer-service-url">{t('admin.settings.customerServiceUrl')}</Label>
+                            <Input
+                                id="customer-service-url"
+                                value={customerServiceUrlValue}
+                                onChange={(e) => setCustomerServiceUrlValue(e.target.value)}
+                                placeholder={t('admin.settings.customerServiceUrlPlaceholder')}
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="customer-service-svg">{t('admin.settings.customerServiceSvg')}</Label>
+                            <Textarea
+                                id="customer-service-svg"
+                                value={customerServiceSvgValue}
+                                onChange={(e) => setCustomerServiceSvgValue(e.target.value)}
+                                placeholder={t('admin.settings.customerServiceSvgPlaceholder')}
+                                rows={4}
+                            />
+                        </div>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-xs text-muted-foreground">{t('admin.settings.customerServiceHint')}</p>
+                            <Button variant="outline" onClick={handleSaveCustomerService} disabled={savingCustomerService}>
+                                {savingCustomerService ? t('common.processing') : t('common.save')}
                             </Button>
                         </div>
                     </div>
