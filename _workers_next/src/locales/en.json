@@ -300,7 +300,7 @@
             "customerServiceUrlPlaceholder": "https://example.com/support",
             "customerServiceSvg": "Support SVG Icon",
             "customerServiceSvgPlaceholder": "<svg ...></svg>",
-            "customerServiceHint": "After configuring both the link and SVG, the homepage shows a support button that opens in a new tab.",
+            "customerServiceHint": "After configuring both the link and SVG, the header shows a support icon that opens in a new tab.",
             "shopLogo": "Store Logo",
             "shopLogoPlaceholder": "https://example.com/logo.png",
             "shopLogoHint": "Used as both site logo and favicon. Square images recommended.",

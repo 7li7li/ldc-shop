@@ -57,8 +57,6 @@ interface HomeContentProps {
     pointsPurchaseRate?: number
     homeTitle?: string | null
     homeSubtitle?: string | null
-    customerServiceUrl?: string | null
-    customerServiceSvg?: string | null
     filters: { q?: string; category?: string | null; sort?: string }
     pagination: { page: number; pageSize: number; total: number }
 }
@@ -75,8 +73,6 @@ export function HomeContent({
     pointsPurchaseRate = 1,
     homeTitle,
     homeSubtitle,
-    customerServiceUrl,
-    customerServiceSvg,
     filters,
     pagination,
 }: HomeContentProps) {
@@ -129,13 +125,6 @@ export function HomeContent({
     const hasPendingOrders = Boolean(pendingOrders && pendingOrders.length > 0)
     const displayHomeTitle = homeTitle?.trim() || t("home.title")
     const displayHomeSubtitle = homeSubtitle?.trim() || t("home.subtitle")
-    const customerServiceHref = customerServiceUrl?.trim()
-    const customerServiceIconSrc = useMemo(() => {
-        const svg = customerServiceSvg?.trim()
-        if (!svg) return null
-        return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
-    }, [customerServiceSvg])
-    const showCustomerService = Boolean(customerServiceHref && customerServiceIconSrc)
     const sortOptions = [
         { key: "default", label: t("home.sort.default") },
         { key: "stockDesc", label: t("home.sort.stock") },
@@ -165,14 +154,6 @@ export function HomeContent({
                             </p>
                         </div>
                         <div className="flex w-full flex-col items-stretch gap-2 md:w-auto md:flex-row md:items-center md:justify-end md:gap-3">
-                            {showCustomerService && (
-                                <Button asChild variant="outline" className="h-10 rounded-2xl border-border/50 bg-background/70 px-4 shadow-none">
-                                    <a href={customerServiceHref} target="_blank" rel="noopener noreferrer">
-                                        <img src={customerServiceIconSrc || ''} alt="" className="h-4 w-4 object-contain" />
-                                        {t("home.customerService")}
-                                    </a>
-                                </Button>
-                            )}
                             {isLoggedIn && (
                                 <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
                                     <CheckInButton

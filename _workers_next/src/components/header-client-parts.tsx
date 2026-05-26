@@ -6,7 +6,7 @@ import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { LanguageSwitcher } from "@/components/language-switcher"
 import { Input } from "@/components/ui/input"
 import { usePathname, useRouter } from "next/navigation"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { getMyUnreadCount } from "@/actions/user-notifications"
 import { Heart, Users } from "lucide-react"
@@ -89,13 +89,42 @@ export function HeaderSearch({ className }: { className?: string }) {
     )
 }
 
-export function HeaderQuickActions({ wishlistEnabled, visitorCount }: { wishlistEnabled: boolean; visitorCount: number | null }) {
+export function HeaderQuickActions({
+    wishlistEnabled,
+    visitorCount,
+    customerServiceUrl,
+    customerServiceSvg,
+}: {
+    wishlistEnabled: boolean
+    visitorCount: number | null
+    customerServiceUrl: string | null
+    customerServiceSvg: string | null
+}) {
     const { t } = useI18n()
+    const customerServiceHref = customerServiceUrl?.trim()
+    const customerServiceIconSrc = useMemo(() => {
+        const svg = customerServiceSvg?.trim()
+        if (!svg) return null
+        return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+    }, [customerServiceSvg])
+    const showCustomerService = Boolean(customerServiceHref && customerServiceIconSrc)
 
-    if (!wishlistEnabled && typeof visitorCount !== "number") return null
+    if (!showCustomerService && !wishlistEnabled && typeof visitorCount !== "number") return null
 
     return (
         <div className="flex items-center gap-1">
+            {showCustomerService && (
+                <a
+                    href={customerServiceHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={t('home.customerService')}
+                    title={t('home.customerService')}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors duration-200 hover:bg-background/70 hover:text-primary"
+                >
+                    <img src={customerServiceIconSrc || ''} alt="" className="h-4 w-4 object-contain" />
+                </a>
+            )}
             {wishlistEnabled && (
                 <Link
                     href="/wishlist"

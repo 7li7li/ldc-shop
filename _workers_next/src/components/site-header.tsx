@@ -57,16 +57,24 @@ export async function SiteHeader() {
 
     let wishlistEnabled = false
     let visitorCount: number | null = null
+    let customerServiceUrl: string | null = null
+    let customerServiceSvg: string | null = null
     try {
-        const [wishlistSetting, visitors] = await Promise.all([
+        const [wishlistSetting, visitors, supportUrl, supportSvg] = await Promise.all([
             getSetting('wishlist_enabled'),
-            getVisitorCount().catch(() => null)
+            getVisitorCount().catch(() => null),
+            getSetting('customer_service_url'),
+            getSetting('customer_service_svg')
         ])
         wishlistEnabled = wishlistSetting === 'true'
         visitorCount = typeof visitors === 'number' ? visitors : null
+        customerServiceUrl = supportUrl
+        customerServiceSvg = supportSvg
     } catch {
         wishlistEnabled = false
         visitorCount = null
+        customerServiceUrl = null
+        customerServiceSvg = null
     }
 
     let unreadCount = 0
@@ -96,7 +104,12 @@ export async function SiteHeader() {
                 </div>
                 <div className="ml-auto flex items-center justify-end gap-2 md:gap-3">
                     <nav className="flex items-center space-x-1 rounded-full border border-border/20 bg-muted/20 px-1.5 py-1 md:px-2">
-                        <HeaderQuickActions wishlistEnabled={wishlistEnabled} visitorCount={visitorCount} />
+                        <HeaderQuickActions
+                            wishlistEnabled={wishlistEnabled}
+                            visitorCount={visitorCount}
+                            customerServiceUrl={customerServiceUrl}
+                            customerServiceSvg={customerServiceSvg}
+                        />
                         <LanguageSwitcher />
                         <ModeToggle />
                         {user ? (

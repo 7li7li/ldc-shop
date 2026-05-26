@@ -300,7 +300,7 @@
             "customerServiceUrlPlaceholder": "https://example.com/support",
             "customerServiceSvg": "客服 SVG 图标",
             "customerServiceSvgPlaceholder": "<svg ...></svg>",
-            "customerServiceHint": "配置链接和 SVG 后，首页会显示客服按钮并在新标签页打开链接。",
+            "customerServiceHint": "配置链接和 SVG 后，顶部 Head 栏会显示客服图标并在新标签页打开链接。",
             "shopLogo": "商店Logo",
             "shopLogoPlaceholder": "https://example.com/logo.png",
             "shopLogoHint": "同时作为网站Logo和Favicon使用，建议使用正方形图片。",

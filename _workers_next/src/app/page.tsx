@@ -32,7 +32,7 @@ export default async function Home({
   const trustLevel = Number.isFinite(Number(session?.user?.trustLevel)) ? Number(session?.user?.trustLevel) : 0
 
   // Run all independent queries in parallel for better performance
-  const [products, announcement, categoryConfig, productCategories, checkinEnabled, pointsPurchaseEnabled, pointsPurchaseRate, homeTitle, homeSubtitle, customerServiceUrl, customerServiceSvg] = await Promise.all([
+  const [products, announcement, categoryConfig, productCategories, checkinEnabled, pointsPurchaseEnabled, pointsPurchaseRate, homeTitle, homeSubtitle] = await Promise.all([
     getActiveProducts({ isLoggedIn, trustLevel }).catch(() => []),
     getActiveAnnouncement().catch(() => null),
     getCategories().catch(() => []),
@@ -60,9 +60,7 @@ export default async function Home({
       }
     })(),
     getSetting('home_title').catch(() => null),
-    getSetting('home_subtitle').catch(() => null),
-    getSetting('customer_service_url').catch(() => null),
-    getSetting('customer_service_svg').catch(() => null)
+    getSetting('home_subtitle').catch(() => null)
   ]);
 
 
@@ -136,8 +134,6 @@ export default async function Home({
     pointsPurchaseRate={pointsPurchaseRate}
     homeTitle={homeTitle}
     homeSubtitle={homeSubtitle}
-    customerServiceUrl={customerServiceUrl}
-    customerServiceSvg={customerServiceSvg}
     filters={{ q, category: category || null, sort }}
     pagination={{ page, pageSize: PAGE_SIZE, total }}
   />;
