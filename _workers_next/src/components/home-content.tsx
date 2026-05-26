@@ -57,6 +57,8 @@ interface HomeContentProps {
     checkinEnabled?: boolean
     pointsPurchaseEnabled?: boolean
     pointsPurchaseRate?: number
+    homeTitle?: string | null
+    homeSubtitle?: string | null
     filters: { q?: string; category?: string | null; sort?: string }
     pagination: { page: number; pageSize: number; total: number }
 }
@@ -73,6 +75,8 @@ export function HomeContent({
     checkinEnabled = true,
     pointsPurchaseEnabled = false,
     pointsPurchaseRate = 1,
+    homeTitle,
+    homeSubtitle,
     filters,
     pagination,
 }: HomeContentProps) {
@@ -123,6 +127,8 @@ export function HomeContent({
     const hasMore = currentPage < totalPages
     const hasAnnouncement = Boolean(announcement?.banner)
     const hasPendingOrders = Boolean(pendingOrders && pendingOrders.length > 0)
+    const displayHomeTitle = homeTitle?.trim() || t("home.title")
+    const displayHomeSubtitle = homeSubtitle?.trim() || t("home.subtitle")
     const sortOptions = [
         { key: "default", label: t("home.sort.default") },
         { key: "stockDesc", label: t("home.sort.stock") },
@@ -197,10 +203,10 @@ export function HomeContent({
                     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                         <div className="min-w-0 space-y-1.5">
                             <h1 className="bg-gradient-to-r from-foreground via-foreground/75 to-foreground/45 bg-clip-text text-lg font-medium tracking-tight text-transparent sm:text-xl">
-                                {t("home.title")}
+                                {displayHomeTitle}
                             </h1>
                             <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                                {t("home.subtitle")}
+                                {displayHomeSubtitle}
                             </p>
                         </div>
                         <div className="flex w-full flex-col items-stretch gap-2 md:w-auto md:flex-row md:items-center md:justify-end md:gap-3">

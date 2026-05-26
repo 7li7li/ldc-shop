@@ -587,6 +587,27 @@ export async function saveShopDescription(rawDesc: string) {
     updateTag('home:product-categories')
 }
 
+export async function saveHomeIntro(rawTitle: string, rawSubtitle: string) {
+    await checkAdmin()
+
+    const title = rawTitle.trim()
+    const subtitle = rawSubtitle.trim()
+
+    if (title.length > 80) {
+        throw new Error("Homepage title is too long")
+    }
+    if (subtitle.length > 160) {
+        throw new Error("Homepage subtitle is too long")
+    }
+
+    await setSetting('home_title', title)
+    await setSetting('home_subtitle', subtitle)
+    revalidatePath('/')
+    revalidatePath('/admin/settings')
+    updateTag('home:products')
+    updateTag('home:product-categories')
+}
+
 export async function saveShopLogo(logoUrl: string) {
     await checkAdmin()
 

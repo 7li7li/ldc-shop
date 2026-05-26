@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { TrendingUp, ShoppingCart, CreditCard, Package, Users } from "lucide-react"
-import { saveShopName, saveShopDescription, saveShopLogo, saveShopFooter, saveThemeColor, saveThemeFont, saveLowStockThreshold, saveCheckinReward, saveCheckinEnabled, saveWishlistEnabled, saveNoIndex, saveRefundReclaimCards, saveRegistryHideNav, saveCurrencyUnit, savePointsPurchaseSettings } from "@/actions/admin"
+import { saveShopName, saveShopDescription, saveHomeIntro, saveShopLogo, saveShopFooter, saveThemeColor, saveThemeFont, saveLowStockThreshold, saveCheckinReward, saveCheckinEnabled, saveWishlistEnabled, saveNoIndex, saveRefundReclaimCards, saveRegistryHideNav, saveCurrencyUnit, savePointsPurchaseSettings } from "@/actions/admin"
 import { joinRegistry, leaveRegistry } from "@/actions/registry"
 import { checkForUpdatesClient, type ClientUpdateCheckResult } from "@/lib/update-check-client"
 import { toast } from "sonner"
@@ -29,6 +29,8 @@ interface AdminSettingsContentProps {
     stats: Stats
     shopName: string | null
     shopDescription: string | null
+    homeTitle: string | null
+    homeSubtitle: string | null
     shopLogo: string | null
     shopFooter: string | null
     currencyUnit: string | null
@@ -69,7 +71,7 @@ const THEME_COLORS = [
 
 const SHOP_LOGO_UPLOAD_MAX_BYTES = 500 * 1024
 
-export function AdminSettingsContent({ stats, shopName, shopDescription, shopLogo, shopFooter, currencyUnit, themeColor, themeFont, visitorCount, lowStockThreshold, checkinReward, checkinEnabled, pointsPurchaseEnabled, pointsPurchaseRate, wishlistEnabled, noIndexEnabled, refundReclaimCards, registryHideNav, registryOptIn, registryEnabled, currentVersion }: AdminSettingsContentProps) {
+export function AdminSettingsContent({ stats, shopName, shopDescription, homeTitle, homeSubtitle, shopLogo, shopFooter, currencyUnit, themeColor, themeFont, visitorCount, lowStockThreshold, checkinReward, checkinEnabled, pointsPurchaseEnabled, pointsPurchaseRate, wishlistEnabled, noIndexEnabled, refundReclaimCards, registryHideNav, registryOptIn, registryEnabled, currentVersion }: AdminSettingsContentProps) {
     const { t } = useI18n()
     const router = useRouter()
     const shopLogoFileInputRef = useRef<HTMLInputElement | null>(null)
@@ -79,6 +81,9 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, shopLog
     const [savingShopName, setSavingShopName] = useState(false)
     const [shopDescValue, setShopDescValue] = useState(shopDescription || '')
     const [savingShopDesc, setSavingShopDesc] = useState(false)
+    const [homeTitleValue, setHomeTitleValue] = useState(homeTitle || '')
+    const [homeSubtitleValue, setHomeSubtitleValue] = useState(homeSubtitle || '')
+    const [savingHomeIntro, setSavingHomeIntro] = useState(false)
     const [shopLogoValue, setShopLogoValue] = useState(shopLogo || '')
     const [savingShopLogo, setSavingShopLogo] = useState(false)
     const [shopFooterValue, setShopFooterValue] = useState(shopFooter || '')
@@ -141,6 +146,21 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, shopLog
             toast.error(e.message)
         } finally {
             setSavingShopDesc(false)
+        }
+    }
+
+    const handleSaveHomeIntro = async () => {
+        setSavingHomeIntro(true)
+        try {
+            await saveHomeIntro(homeTitleValue, homeSubtitleValue)
+            setHomeTitleValue(homeTitleValue.trim())
+            setHomeSubtitleValue(homeSubtitleValue.trim())
+            router.refresh()
+            toast.success(t('common.success'))
+        } catch (e: any) {
+            toast.error(e.message)
+        } finally {
+            setSavingHomeIntro(false)
         }
     }
 
@@ -491,6 +511,33 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, shopLog
                             />
                             <Button variant="outline" onClick={handleSaveShopDesc} disabled={savingShopDesc}>
                                 {savingShopDesc ? t('common.processing') : t('common.save')}
+                            </Button>
+                        </div>
+                    </div>
+                    <div className="grid gap-3 md:max-w-xl">
+                        <div className="grid gap-2">
+                            <Label htmlFor="home-title">{t('admin.settings.homeTitle')}</Label>
+                            <Input
+                                id="home-title"
+                                value={homeTitleValue}
+                                onChange={(e) => setHomeTitleValue(e.target.value)}
+                                placeholder={t('admin.settings.homeTitlePlaceholder')}
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="home-subtitle">{t('admin.settings.homeSubtitle')}</Label>
+                            <Textarea
+                                id="home-subtitle"
+                                value={homeSubtitleValue}
+                                onChange={(e) => setHomeSubtitleValue(e.target.value)}
+                                placeholder={t('admin.settings.homeSubtitlePlaceholder')}
+                                rows={2}
+                            />
+                        </div>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-xs text-muted-foreground">{t('admin.settings.homeIntroHint')}</p>
+                            <Button variant="outline" onClick={handleSaveHomeIntro} disabled={savingHomeIntro}>
+                                {savingHomeIntro ? t('common.processing') : t('common.save')}
                             </Button>
                         </div>
                     </div>
