@@ -144,6 +144,52 @@ export function HomeContent({
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(59,130,246,0.12),transparent)] dark:bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(96,165,250,0.14),transparent)]" />
             </div>
 
+            <section className="relative mb-8 overflow-hidden rounded-[2rem] border border-border/40 bg-gradient-to-br from-card via-card/95 to-primary/5 shadow-[0_25px_80px_-40px_rgba(15,23,42,0.25)]">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.75),_transparent_36%)] dark:bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.08),_transparent_36%)]" />
+                <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
+                <div className="relative px-6 py-5 md:px-8 md:py-6">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                        <div className="min-w-0 space-y-1.5">
+                            <h1 className="bg-gradient-to-r from-foreground via-foreground/75 to-foreground/45 bg-clip-text text-lg font-medium tracking-tight text-transparent sm:text-xl">
+                                {displayHomeTitle}
+                            </h1>
+                            <p className="max-w-2xl whitespace-pre-line text-sm leading-6 text-muted-foreground">
+                                {displayHomeSubtitle}
+                            </p>
+                        </div>
+                        <div className="flex w-full flex-col items-stretch gap-2 md:w-auto md:flex-row md:items-center md:justify-end md:gap-3">
+                            {isLoggedIn && (
+                                <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
+                                    <CheckInButton
+                                        enabled={checkinEnabled}
+                                        showCheckedInLabel
+                                        className="flex w-full md:w-auto"
+                                    />
+                                    {pointsPurchaseEnabled && <PointsPurchaseButton rate={pointsPurchaseRate} />}
+                                </div>
+                            )}
+                            <div className="flex flex-wrap items-center gap-2 md:gap-3">
+                                {typeof visitorCount === "number" && (
+                                    <div className="inline-flex items-center gap-2 rounded-full border border-border/40 bg-background/60 px-3.5 py-2 text-sm backdrop-blur-sm">
+                                        <Users className="h-3.5 w-3.5 text-primary" />
+                                        <span className="font-semibold tabular-nums text-foreground">{visitorCount}</span>
+                                        <span className="text-xs text-muted-foreground">{t("home.metrics.visitors")}</span>
+                                    </div>
+                                )}
+                                {wishlistEnabled && (
+                                    <Link href="/wishlist" className="inline-flex">
+                                        <Button variant="outline" className="h-10 rounded-2xl border-border/50 bg-background/70 px-4 shadow-none">
+                                            <Heart className="mr-2 h-4 w-4" />
+                                            {t("wishlist.title")}
+                                        </Button>
+                                    </Link>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             {(hasAnnouncement || hasPendingOrders) && (
                 <section className="mb-5 grid gap-3 xl:grid-cols-[minmax(0,1.45fr)_minmax(22rem,0.9fr)]">
                     {hasAnnouncement && (
@@ -195,52 +241,6 @@ export function HomeContent({
                     )}
                 </section>
             )}
-
-            <section className="relative mb-8 overflow-hidden rounded-[2rem] border border-border/40 bg-gradient-to-br from-card via-card/95 to-primary/5 shadow-[0_25px_80px_-40px_rgba(15,23,42,0.25)]">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.75),_transparent_36%)] dark:bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.08),_transparent_36%)]" />
-                <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
-                <div className="relative px-6 py-5 md:px-8 md:py-6">
-                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                        <div className="min-w-0 space-y-1.5">
-                            <h1 className="bg-gradient-to-r from-foreground via-foreground/75 to-foreground/45 bg-clip-text text-lg font-medium tracking-tight text-transparent sm:text-xl">
-                                {displayHomeTitle}
-                            </h1>
-                            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                                {displayHomeSubtitle}
-                            </p>
-                        </div>
-                        <div className="flex w-full flex-col items-stretch gap-2 md:w-auto md:flex-row md:items-center md:justify-end md:gap-3">
-                            {isLoggedIn && (
-                                <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
-                                    <CheckInButton
-                                        enabled={checkinEnabled}
-                                        showCheckedInLabel
-                                        className="flex w-full md:w-auto"
-                                    />
-                                    {pointsPurchaseEnabled && <PointsPurchaseButton rate={pointsPurchaseRate} />}
-                                </div>
-                            )}
-                            <div className="flex flex-wrap items-center gap-2 md:gap-3">
-                                {typeof visitorCount === "number" && (
-                                    <div className="inline-flex items-center gap-2 rounded-full border border-border/40 bg-background/60 px-3.5 py-2 text-sm backdrop-blur-sm">
-                                        <Users className="h-3.5 w-3.5 text-primary" />
-                                        <span className="font-semibold tabular-nums text-foreground">{visitorCount}</span>
-                                        <span className="text-xs text-muted-foreground">{t("home.metrics.visitors")}</span>
-                                    </div>
-                                )}
-                                {wishlistEnabled && (
-                                    <Link href="/wishlist" className="inline-flex">
-                                        <Button variant="outline" className="h-10 rounded-2xl border-border/50 bg-background/70 px-4 shadow-none">
-                                            <Heart className="mr-2 h-4 w-4" />
-                                            {t("wishlist.title")}
-                                        </Button>
-                                    </Link>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
 
             <section className="mb-10 space-y-4">
                 <div className="flex flex-col gap-4 rounded-[1.8rem] border border-border/40 bg-card/70 p-4 shadow-[0_20px_50px_-36px_rgba(15,23,42,0.3)] backdrop-blur-md">
