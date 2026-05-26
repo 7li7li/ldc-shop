@@ -34,7 +34,7 @@ export default async function OrdersPage() {
         }
     }
 
-    const productIds = Array.from(new Set(userOrders.map((o: any) => o.productId).filter(Boolean)))
+    const productIds: string[] = Array.from(new Set(userOrders.map((o: any) => o.productId).filter((id: any): id is string => Boolean(id))))
     const productVariantLabels = productIds.length > 0 ? await getProductVariantLabels(productIds) : {}
 
     let productImages: Record<string, string | null> = {}

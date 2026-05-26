@@ -348,7 +348,7 @@ export async function deleteCards(cardIds: number[]) {
             const rows = await db.select({ productId: cards.productId })
                 .from(cards)
                 .where(inArray(cards.id, batch))
-            productIds.push(...rows.map(r => r.productId))
+            productIds.push(...rows.map((r: { productId: string }) => r.productId))
         } catch {
             // best effort
         }

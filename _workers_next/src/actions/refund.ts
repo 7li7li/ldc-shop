@@ -75,10 +75,10 @@ export async function markOrderRefunded(orderId: string) {
         const rawIds = order.cardIds || '';
         const parsedIds = rawIds
             .split(',')
-            .map((id) => Number(id.trim()))
-            .filter((id) => Number.isFinite(id));
+            .map((id: string) => Number(id.trim()))
+            .filter((id: number) => Number.isFinite(id));
 
-        const uniqueIds = Array.from(new Set(parsedIds));
+        const uniqueIds: number[] = Array.from(new Set(parsedIds));
 
         if (uniqueIds.length > 0) {
             await db.update(cards).set({ isUsed: false, usedAt: null, reservedOrderId: null, reservedAt: null })

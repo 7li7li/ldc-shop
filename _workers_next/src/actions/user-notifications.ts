@@ -84,7 +84,7 @@ export async function getMyNotifications() {
     }
 
     const rows = await getUserNotifications(userId, 20)
-    const directItems = rows.map((n) => ({
+    const directItems = rows.map((n: any) => ({
         id: n.id,
         type: n.type,
         titleKey: n.titleKey,
@@ -125,13 +125,13 @@ export async function getMyNotifications() {
                 .limit(BROADCAST_LIMIT)
 
         if (broadcasts.length > 0) {
-            const ids = broadcasts.map((b) => b.id)
+            const ids: number[] = broadcasts.map((b: any) => Number(b.id)).filter((id: number) => Number.isFinite(id))
             const readRows = await db
                 .select({ id: broadcastReads.messageId })
                 .from(broadcastReads)
                 .where(and(eq(broadcastReads.userId, userId), sql`${broadcastReads.messageId} IN (${sql.join(ids)})`))
-            const readSet = new Set(readRows.map((r) => Number(r.id)))
-            broadcastItems = broadcasts.map((b) => {
+            const readSet = new Set(readRows.map((r: any) => Number(r.id)))
+            broadcastItems = broadcasts.map((b: any) => {
                 const bid = Number(b.id)
                 return ({
                     id: bid,
@@ -177,7 +177,7 @@ export async function getMyUnreadCount() {
                 .from(broadcastMessages)
                 .orderBy(desc(broadcastMessages.createdAt))
                 .limit(BROADCAST_LIMIT)
-        const ids = broadcastRows.map((b) => b.id)
+        const ids: number[] = broadcastRows.map((b: any) => Number(b.id)).filter((id: number) => Number.isFinite(id))
         if (ids.length === 0) {
             broadcastUnread = 0
         } else {

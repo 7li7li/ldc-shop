@@ -83,7 +83,7 @@ export default async function ProfilePage() {
     }> = []
     try {
         const rows = await getUserNotifications(userId, 20)
-        notifications = rows.map((n) => ({
+        notifications = rows.map((n: any) => ({
             id: n.id,
             type: n.type,
             titleKey: n.titleKey,
@@ -108,7 +108,7 @@ export default async function ProfilePage() {
             .where(eq(userMessages.userId, userId))
             .orderBy(desc(userMessages.createdAt))
             .limit(20)
-        sentMessages = rows.map((r) => ({
+        sentMessages = rows.map((r: any) => ({
             id: r.id,
             title: r.title,
             body: r.body,

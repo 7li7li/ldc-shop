@@ -71,7 +71,7 @@ export default async function AdminOrdersPage(props: {
         ])
     })
 
-    const orderUserIds = Array.from(new Set(
+    const orderUserIds: string[] = Array.from(new Set(
         rows
             .map((o: any) => (typeof o.userId === "string" ? o.userId.trim() : ""))
             .filter((id: string) => id.length > 0)
@@ -99,7 +99,7 @@ export default async function AdminOrdersPage(props: {
 
     const total = countRes[0]?.count || 0
 
-    const productIds = Array.from(new Set(rows.map((o: any) => o.productId).filter(Boolean)))
+    const productIds: string[] = Array.from(new Set(rows.map((o: any) => o.productId).filter((id: any): id is string => Boolean(id))))
     const productVariantLabels = productIds.length > 0 ? await getProductVariantLabels(productIds) : {}
 
     return (

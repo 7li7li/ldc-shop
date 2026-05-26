@@ -62,7 +62,7 @@ export async function getBuyPageMeta(productId: string): Promise<BuyPageMeta> {
         getEmailSettings().catch(() => ({ apiKey: null, fromEmail: null, enabled: false, fromName: null })),
     ])
 
-    const reviews: BuyMetaReview[] = rawReviews.map((review) => ({
+    const reviews: BuyMetaReview[] = rawReviews.map((review: any) => ({
         id: Number(review.id),
         username: review.username || "",
         userId: review.userId || null,

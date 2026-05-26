@@ -809,7 +809,7 @@ async function backfillProductAggregates() {
     try {
         await ensureProductsColumns();
         const rows = await db.select({ id: products.id }).from(products);
-        await recalcProductAggregatesForMany(rows.map((row) => row.id));
+        await recalcProductAggregatesForMany(rows.map((row: { id: string }) => row.id));
         await markProductAggregatesBackfilled();
     } catch (error: any) {
         if (!isMissingTableOrColumn(error)) throw error;
@@ -1266,7 +1266,7 @@ export const getSetting = cache(async (key: string): Promise<string | null> => {
 export const getAllSettings = cache(async (): Promise<Record<string, string>> => {
     try {
         const rows = await db.select({ key: settings.key, value: settings.value }).from(settings);
-        return rows.reduce((acc, row) => {
+        return rows.reduce((acc: Record<string, string>, row: { key: string; value: string | null }) => {
             acc[row.key] = row.value || '';
             return acc;
         }, {} as Record<string, string>);
@@ -1551,7 +1551,7 @@ export async function getActiveProductCategories(options?: { isLoggedIn?: boolea
             ))
             .groupBy(products.category)
             .orderBy(asc(products.category));
-        return rows.map((r) => r.category as string).filter(Boolean);
+        return rows.map((r: { category: string | null }) => r.category as string).filter(Boolean);
     } catch (error: any) {
         if (isMissingTable(error)) return [];
         throw error;
@@ -1566,12 +1566,12 @@ export async function getProductReviews(productId: string) {
         .where(eq(reviews.productId, productId))
         .orderBy(desc(reviews.createdAt));
 
-    if (!reviewRows.length) return reviewRows.map((review) => ({ ...review, replies: [] }));
+    if (!reviewRows.length) return reviewRows.map((review: any) => ({ ...review, replies: [] }));
 
     try {
         const replyRows = await db.select()
             .from(reviewReplies)
-            .where(inArray(reviewReplies.reviewId, reviewRows.map((review) => review.id)))
+            .where(inArray(reviewReplies.reviewId, reviewRows.map((review: any) => review.id)))
             .orderBy(asc(reviewReplies.createdAt));
 
         const replyMap = new Map<number, typeof replyRows>()
@@ -1581,13 +1581,13 @@ export async function getProductReviews(productId: string) {
             replyMap.set(reply.reviewId, list)
         }
 
-        return reviewRows.map((review) => ({
+        return reviewRows.map((review: any) => ({
             ...review,
             replies: replyMap.get(review.id) ?? [],
         }));
     } catch (error: any) {
         if (!isMissingTableOrColumn(error)) throw error;
-        return reviewRows.map((review) => ({ ...review, replies: [] }));
+        return reviewRows.map((review: any) => ({ ...review, replies: [] }));
     }
 }
 
@@ -2459,7 +2459,7 @@ export async function cleanupExpiredCardsIfNeeded(throttleMs: number = 10 * 60 *
         const rows = await db.select({ productId: cards.productId })
             .from(cards)
             .where(sql`${cards.expiresAt} IS NOT NULL AND ${cards.expiresAt} < ${now}`);
-        affectedProductIds = Array.from(new Set(rows.map((r) => r.productId).filter(Boolean)));
+        affectedProductIds = Array.from(new Set(rows.map((r: { productId: string }) => r.productId).filter(Boolean)));
     } catch (error: any) {
         if (!isMissingTableOrColumn(error)) throw error;
     }

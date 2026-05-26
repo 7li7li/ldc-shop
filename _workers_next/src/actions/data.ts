@@ -199,7 +199,7 @@ export async function importData(formData: FormData) {
 
         try {
             const productRows = await db.select({ id: products.id }).from(products);
-            const productIds = productRows.map((r) => r.id).filter(Boolean);
+            const productIds = productRows.map((r: { id: string }) => r.id).filter(Boolean);
             await recalcProductAggregatesForMany(productIds);
         } catch {
             // best effort
