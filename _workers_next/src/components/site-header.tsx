@@ -59,7 +59,9 @@ export async function SiteHeader() {
             registryHideNav = false
         }
     }
-    const showNavigator = registryEnabled && (registryOptIn || !registryHideNav)
+    // LDC navigator entry is intentionally hidden.
+    // const showNavigator = registryEnabled && (registryOptIn || !registryHideNav)
+    const showNavigator = false
 
     let unreadCount = 0
     let desktopNotificationsEnabled = false

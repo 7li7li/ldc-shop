@@ -28,7 +28,9 @@ export async function MobileNavWrapper() {
             registryHideNav = false
         }
     }
-    const showNav = registryEnabled && (registryOptIn || !registryHideNav)
+    // LDC navigator entry is intentionally hidden.
+    // const showNav = registryEnabled && (registryOptIn || !registryHideNav)
+    const showNav = false
 
     return <MobileNav isLoggedIn={!!user} isAdmin={isAdmin} showNav={showNav} />
 }

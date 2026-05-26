@@ -692,6 +692,16 @@ export async function saveCheckinEnabled(enabled: boolean) {
     updateTag('home:product-categories')
 }
 
+export async function savePointsPurchaseSettings(enabled: boolean, rawRate: string) {
+    await checkAdmin()
+    const rate = Number.parseFloat(String(rawRate || '').trim())
+    const value = Number.isFinite(rate) && rate > 0 ? String(rate) : '1'
+    await setSetting('points_purchase_enabled', enabled ? 'true' : 'false')
+    await setSetting('points_purchase_rate', value)
+    revalidatePath('/admin/settings')
+    revalidatePath('/')
+}
+
 export async function saveNoIndex(enabled: boolean) {
     await checkAdmin()
     await setSetting('noindex_enabled', enabled ? 'true' : 'false')

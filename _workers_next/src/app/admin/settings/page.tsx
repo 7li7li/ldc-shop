@@ -29,6 +29,8 @@ export default async function AdminSettingsPage() {
     const lowStockThreshold = Number.parseInt(settingsMap['low_stock_threshold'] || '5', 10) || 5
     const checkinReward = Number.parseInt(settingsMap['checkin_reward'] || '10', 10) || 10
     const checkinEnabled = settingsMap['checkin_enabled'] !== 'false'
+    const pointsPurchaseEnabled = settingsMap['points_purchase_enabled'] === 'true'
+    const pointsPurchaseRate = Number.parseFloat(settingsMap['points_purchase_rate'] || '1') || 1
     const wishlistEnabled = settingsMap['wishlist_enabled'] === 'true'
     const noIndexEnabled = settingsMap['noindex_enabled'] === 'true'
     const registryOptIn = settingsMap['registry_opt_in'] === 'true'
@@ -49,6 +51,8 @@ export default async function AdminSettingsPage() {
             lowStockThreshold={lowStockThreshold}
             checkinReward={checkinReward}
             checkinEnabled={checkinEnabled}
+            pointsPurchaseEnabled={pointsPurchaseEnabled}
+            pointsPurchaseRate={pointsPurchaseRate}
             wishlistEnabled={wishlistEnabled}
             noIndexEnabled={noIndexEnabled}
             registryOptIn={registryOptIn}

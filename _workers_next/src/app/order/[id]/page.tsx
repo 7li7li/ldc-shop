@@ -55,6 +55,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
                 status: order.status || 'pending',
                 cardKey: order.cardKey,
                 payee: order.payee,
+                quantity: order.quantity,
                 createdAt: order.createdAt,
                 paidAt: order.paidAt
             }}

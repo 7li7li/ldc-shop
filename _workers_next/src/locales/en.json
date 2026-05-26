@@ -227,6 +227,18 @@
         "itemLabel": "Payment Item",
         "paidMessage": "Payment received. No delivery or card is required."
     },
+    "pointsPurchase": {
+        "title": "Points Top-up",
+        "buyButton": "Buy Points",
+        "description": "Current rate: 1 currency unit = {{rate}} points.",
+        "preview": "Estimated top-up: {{points}} points",
+        "disabled": "Points purchase is disabled.",
+        "invalidPoints": "The amount is too low to convert to points.",
+        "paidMessage": "Top-up successful. {{points}} points have been added.",
+        "notificationTitle": "Points top-up successful",
+        "notificationBody": "Your points top-up has arrived: +{{points}} points.",
+        "refundInsufficientPoints": "The user does not have enough points for an automatic refund."
+    },
     "orders": {
         "title": "My Orders",
         "noOrders": "You haven't placed any orders yet.",
@@ -306,6 +318,14 @@
                 "saveReward": "Save Points",
                 "enabled": "Enabled",
                 "disabled": "Disabled"
+            },
+            "pointsPurchase": {
+                "title": "Points Purchase",
+                "enableLabel": "Allow users to buy points",
+                "enabled": "Enabled",
+                "disabled": "Disabled",
+                "rateLabel": "Exchange Rate",
+                "hint": "The rate means how many points users receive per 1 currency unit. For example, 10 means paying 1 grants 10 points."
             },
             "noIndex": {
                 "title": "Block Search Engines",

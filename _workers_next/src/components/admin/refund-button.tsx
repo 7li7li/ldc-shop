@@ -29,7 +29,7 @@ export function RefundButton({ order }: { order: any }) {
                 setShowMarkDone(true)
             }
         } catch (e: any) {
-            toast.error(e.message || "Refund failed", { duration: 8000 })
+            toast.error(e.message ? t(e.message) : "Refund failed", { duration: 8000 })
             setShowMarkDone(true)
         } finally {
             setLoading(false)
@@ -45,7 +45,7 @@ export function RefundButton({ order }: { order: any }) {
             toast.success(t('admin.orders.refundSuccess'))
             setShowMarkDone(false)
         } catch (e: any) {
-            toast.error(e.message)
+            toast.error(e.message ? t(e.message) : t('common.error'))
         } finally {
             setLoading(false)
         }
@@ -68,7 +68,7 @@ export function RefundButton({ order }: { order: any }) {
                 toast.error(result.error || t('common.error'))
             }
         } catch (e: any) {
-            toast.error(e.message)
+            toast.error(e.message ? t(e.message) : t('common.error'))
         } finally {
             setLoading(false)
         }

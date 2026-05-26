@@ -2524,7 +2524,7 @@ export async function cancelExpiredOrders(filters: { productId?: string; userId?
         const fiveMinutesAgoMs = Date.now() - RESERVATION_TTL_MS;
         // Preselect expired orders because D1 may not return rows for UPDATE ... RETURNING
         const candidates = await db
-            .select({ orderId: orders.orderId, productId: orders.productId })
+            .select({ orderId: orders.orderId, productId: orders.productId, userId: orders.userId, pointsUsed: orders.pointsUsed })
             .from(orders)
             .where(and(
                 eq(orders.status, 'pending'),
@@ -2534,7 +2534,7 @@ export async function cancelExpiredOrders(filters: { productId?: string; userId?
                 orderId ? eq(orders.orderId, orderId) : sql`1=1`
             ));
 
-        const orderIds = candidates.map((row) => row.orderId).filter(Boolean);
+        const orderIds: string[] = candidates.map((row: any) => row.orderId).filter((id: any): id is string => Boolean(id));
         if (!orderIds.length) return orderIds;
 
         for (const expired of candidates) {
@@ -2550,10 +2550,16 @@ export async function cancelExpiredOrders(filters: { productId?: string; userId?
             }
             await db.update(orders)
                 .set({ status: 'cancelled' })
-                .where(eq(orders.orderId, expiredOrderId));
+                .where(and(eq(orders.orderId, expiredOrderId), eq(orders.status, 'pending')));
+
+            if (expired.userId && expired.pointsUsed && expired.pointsUsed > 0) {
+                await db.update(loginUsers)
+                    .set({ points: sql`${loginUsers.points} + ${expired.pointsUsed}` })
+                    .where(eq(loginUsers.userId, expired.userId));
+            }
         }
 
-        const productIds = Array.from(new Set(candidates.map((row) => row.productId).filter(Boolean)));
+        const productIds: string[] = Array.from(new Set(candidates.map((row: any) => row.productId).filter((id: any): id is string => Boolean(id))));
         for (const pid of productIds) {
             try {
                 await recalcProductAggregates(pid);

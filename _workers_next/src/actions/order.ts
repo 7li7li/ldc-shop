@@ -5,8 +5,8 @@ import { queryOrderStatus } from "@/lib/epay"
 import { processOrderFulfillment } from "@/lib/order-processing"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
-import { orders, cards } from "@/lib/db/schema"
-import { eq } from "drizzle-orm"
+import { orders, cards, loginUsers } from "@/lib/db/schema"
+import { and, eq, sql } from "drizzle-orm"
 import { withOrderColumnFallback, recalcProductAggregates } from "@/lib/db/queries"
 import { cookies } from "next/headers"
 import { updateTag } from "next/cache"
@@ -75,7 +75,7 @@ export async function cancelPendingOrder(orderId: string) {
     const order = await withOrderColumnFallback(async () => {
         return await db.query.orders.findFirst({
             where: eq(orders.orderId, orderId),
-            columns: { userId: true, status: true, productId: true }
+            columns: { userId: true, status: true, productId: true, pointsUsed: true }
         })
     })
 
@@ -89,10 +89,19 @@ export async function cancelPendingOrder(orderId: string) {
             .set({ reservedOrderId: null, reservedAt: null })
             .where(eq(cards.reservedOrderId, orderId))
 
-        // Update order status
-        await db.update(orders)
+        const cancelled = await db.update(orders)
             .set({ status: 'cancelled' })
-            .where(eq(orders.orderId, orderId))
+            .where(and(eq(orders.orderId, orderId), eq(orders.status, 'pending')))
+            .returning({ userId: orders.userId, pointsUsed: orders.pointsUsed })
+
+        if (!cancelled.length) return { success: false, error: 'order.cannotCancel' }
+
+        const cancelledOrder = cancelled[0]
+        if (cancelledOrder.userId && cancelledOrder.pointsUsed && cancelledOrder.pointsUsed > 0) {
+            await db.update(loginUsers)
+                .set({ points: sql`${loginUsers.points} + ${cancelledOrder.pointsUsed}` })
+                .where(eq(loginUsers.userId, cancelledOrder.userId))
+        }
 
         revalidatePath(`/order/${orderId}`)
         revalidatePath('/orders')

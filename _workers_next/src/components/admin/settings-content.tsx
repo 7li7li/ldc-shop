@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { TrendingUp, ShoppingCart, CreditCard, Package, Users } from "lucide-react"
-import { saveShopName, saveShopDescription, saveShopLogo, saveShopFooter, saveThemeColor, saveThemeFont, saveLowStockThreshold, saveCheckinReward, saveCheckinEnabled, saveWishlistEnabled, saveNoIndex, saveRefundReclaimCards, saveRegistryHideNav, saveCurrencyUnit } from "@/actions/admin"
+import { saveShopName, saveShopDescription, saveShopLogo, saveShopFooter, saveThemeColor, saveThemeFont, saveLowStockThreshold, saveCheckinReward, saveCheckinEnabled, saveWishlistEnabled, saveNoIndex, saveRefundReclaimCards, saveRegistryHideNav, saveCurrencyUnit, savePointsPurchaseSettings } from "@/actions/admin"
 import { joinRegistry, leaveRegistry } from "@/actions/registry"
 import { checkForUpdatesClient, type ClientUpdateCheckResult } from "@/lib/update-check-client"
 import { toast } from "sonner"
@@ -38,6 +38,8 @@ interface AdminSettingsContentProps {
     lowStockThreshold: number
     checkinReward: number
     checkinEnabled: boolean
+    pointsPurchaseEnabled: boolean
+    pointsPurchaseRate: number
     wishlistEnabled: boolean
     noIndexEnabled: boolean
     refundReclaimCards: boolean
@@ -67,7 +69,7 @@ const THEME_COLORS = [
 
 const SHOP_LOGO_UPLOAD_MAX_BYTES = 500 * 1024
 
-export function AdminSettingsContent({ stats, shopName, shopDescription, shopLogo, shopFooter, currencyUnit, themeColor, themeFont, visitorCount, lowStockThreshold, checkinReward, checkinEnabled, wishlistEnabled, noIndexEnabled, refundReclaimCards, registryHideNav, registryOptIn, registryEnabled, currentVersion }: AdminSettingsContentProps) {
+export function AdminSettingsContent({ stats, shopName, shopDescription, shopLogo, shopFooter, currencyUnit, themeColor, themeFont, visitorCount, lowStockThreshold, checkinReward, checkinEnabled, pointsPurchaseEnabled, pointsPurchaseRate, wishlistEnabled, noIndexEnabled, refundReclaimCards, registryHideNav, registryOptIn, registryEnabled, currentVersion }: AdminSettingsContentProps) {
     const { t } = useI18n()
     const router = useRouter()
     const shopLogoFileInputRef = useRef<HTMLInputElement | null>(null)
@@ -93,6 +95,9 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, shopLog
     const [savingReward, setSavingReward] = useState(false)
     const [enabledCheckin, setEnabledCheckin] = useState(checkinEnabled)
     const [savingEnabled, setSavingEnabled] = useState(false)
+    const [pointsPurchaseEnabledValue, setPointsPurchaseEnabledValue] = useState(pointsPurchaseEnabled)
+    const [pointsPurchaseRateValue, setPointsPurchaseRateValue] = useState(String(pointsPurchaseRate || 1))
+    const [savingPointsPurchase, setSavingPointsPurchase] = useState(false)
     const [enabledWishlist, setEnabledWishlist] = useState(wishlistEnabled)
     const [savingWishlist, setSavingWishlist] = useState(false)
     const [enabledNoIndex, setEnabledNoIndex] = useState(noIndexEnabled)
@@ -232,6 +237,19 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, shopLog
             toast.error(e.message)
         } finally {
             setSavingEnabled(false)
+        }
+    }
+
+    const handleSavePointsPurchase = async () => {
+        setSavingPointsPurchase(true)
+        try {
+            await savePointsPurchaseSettings(pointsPurchaseEnabledValue, pointsPurchaseRateValue)
+            toast.success(t('common.success'))
+            router.refresh()
+        } catch (e: any) {
+            toast.error(e.message)
+        } finally {
+            setSavingPointsPurchase(false)
         }
     }
 
@@ -594,6 +612,48 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, shopLog
                             </div>
                         </div>
                     )}
+                </CardContent>
+            </Card>
+
+            {/* Points Purchase Settings */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>{t('admin.settings.pointsPurchase.title')}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="flex items-center gap-4">
+                        <Label htmlFor="points-purchase-enable" className="cursor-pointer">{t('admin.settings.pointsPurchase.enableLabel')}</Label>
+                        <Button
+                            id="points-purchase-enable"
+                            variant={pointsPurchaseEnabledValue ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setPointsPurchaseEnabledValue(!pointsPurchaseEnabledValue)}
+                            disabled={savingPointsPurchase}
+                            className={pointsPurchaseEnabledValue ? "bg-green-600 hover:bg-green-700" : ""}
+                        >
+                            {pointsPurchaseEnabledValue ? t('admin.settings.pointsPurchase.enabled') : t('admin.settings.pointsPurchase.disabled')}
+                        </Button>
+                    </div>
+                    <div className="grid gap-2 md:max-w-xs">
+                        <div className="flex gap-2">
+                            <div className="floating-field flex-1 min-w-0">
+                                <Input
+                                    id="points-purchase-rate"
+                                    type="number"
+                                    min="0.01"
+                                    step="0.01"
+                                    value={pointsPurchaseRateValue}
+                                    onChange={(e) => setPointsPurchaseRateValue(e.target.value)}
+                                    placeholder=" "
+                                />
+                                <Label htmlFor="points-purchase-rate" className="floating-label">{t('admin.settings.pointsPurchase.rateLabel')}</Label>
+                            </div>
+                            <Button variant="outline" onClick={handleSavePointsPurchase} disabled={savingPointsPurchase}>
+                                {savingPointsPurchase ? t('common.processing') : t('common.save')}
+                            </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{t('admin.settings.pointsPurchase.hint')}</p>
+                    </div>
                 </CardContent>
             </Card>
 

@@ -32,7 +32,7 @@ export default async function Home({
   const trustLevel = Number.isFinite(Number(session?.user?.trustLevel)) ? Number(session?.user?.trustLevel) : 0
 
   // Run all independent queries in parallel for better performance
-  const [products, announcement, visitorCount, categoryConfig, productCategories, wishlistEnabled, checkinEnabled] = await Promise.all([
+  const [products, announcement, visitorCount, categoryConfig, productCategories, wishlistEnabled, checkinEnabled, pointsPurchaseEnabled, pointsPurchaseRate] = await Promise.all([
     getActiveProducts({ isLoggedIn, trustLevel }).catch(() => []),
     getActiveAnnouncement().catch(() => null),
     getVisitorCount().catch(() => 0),
@@ -50,6 +50,21 @@ export default async function Home({
         return (await getSetting('checkin_enabled')) !== 'false'
       } catch {
         return true
+      }
+    })(),
+    (async () => {
+      try {
+        return (await getSetting('points_purchase_enabled')) === 'true'
+      } catch {
+        return false
+      }
+    })(),
+    (async () => {
+      try {
+        const rate = Number.parseFloat(await getSetting('points_purchase_rate') || '1')
+        return Number.isFinite(rate) && rate > 0 ? rate : 1
+      } catch {
+        return 1
       }
     })()
   ]);
@@ -123,6 +138,8 @@ export default async function Home({
     wishlistEnabled={wishlistEnabled}
     isLoggedIn={isLoggedIn}
     checkinEnabled={checkinEnabled}
+    pointsPurchaseEnabled={pointsPurchaseEnabled}
+    pointsPurchaseRate={pointsPurchaseRate}
     filters={{ q, category: category || null, sort }}
     pagination={{ page, pageSize: PAGE_SIZE, total }}
   />;

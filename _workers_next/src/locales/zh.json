@@ -227,6 +227,18 @@
         "itemLabel": "收款项目",
         "paidMessage": "付款已完成，无需发货或卡密。"
     },
+    "pointsPurchase": {
+        "title": "积分充值",
+        "buyButton": "购买积分",
+        "description": "当前兑换比例：1 金额单位 = {{rate}} 积分。",
+        "preview": "预计到账：{{points}} 积分",
+        "disabled": "积分购买暂未开启",
+        "invalidPoints": "购买金额太低，无法兑换积分",
+        "paidMessage": "充值成功，已到账 {{points}} 积分。",
+        "notificationTitle": "积分充值成功",
+        "notificationBody": "你的积分充值已到账：+{{points}} 积分。",
+        "refundInsufficientPoints": "用户当前积分不足，无法自动退款"
+    },
     "orders": {
         "title": "我的订单",
         "noOrders": "您还没有任何订单",
@@ -306,6 +318,14 @@
                 "saveReward": "保存积分",
                 "enabled": "已启用",
                 "disabled": "已禁用"
+            },
+            "pointsPurchase": {
+                "title": "积分购买",
+                "enableLabel": "允许用户购买积分",
+                "enabled": "已启用",
+                "disabled": "已禁用",
+                "rateLabel": "兑换比例",
+                "hint": "兑换比例表示 1 金额单位可获得多少积分。例如填 10 表示支付 1 可获得 10 积分。"
             },
             "noIndex": {
                 "title": "禁止搜索引擎收录",

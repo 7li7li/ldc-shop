@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { orders, cards, products, loginUsers as users } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { isPaymentOrder } from "@/lib/payment";
+import { isPaymentOrder, isPointsTopupOrder } from "@/lib/payment";
 import { notifyAdminPaymentSuccess } from "@/lib/notifications";
 import { sendOrderEmail } from "@/lib/email";
 import { recalcProductAggregates, createUserNotification } from "@/lib/db/queries";
@@ -125,6 +125,77 @@ export async function processOrderFulfillment(orderId: string, paidAmount: numbe
             })
         }
         await refreshAggregates();
+        return { success: true, status: 'processed' };
+    }
+
+    if (isPointsTopupOrder(order.productId)) {
+        if (!order.userId) {
+            throw new Error(`Points top-up order ${orderId} has no user`);
+        }
+
+        if (order.status === 'pending' || order.status === 'cancelled') {
+            const points = Math.max(0, Number(order.quantity || 0));
+            if (points <= 0) {
+                throw new Error(`Points top-up order ${orderId} has invalid points`);
+            }
+
+            await db.insert(users)
+                .values({
+                    userId: order.userId,
+                    username: order.username || null,
+                    email: order.email || null,
+                    points
+                })
+                .onConflictDoUpdate({
+                    target: users.userId,
+                    set: { points: sql`${users.points} + ${points}` }
+                });
+
+            await db.update(orders)
+                .set({
+                    status: 'paid',
+                    paidAt: new Date(),
+                    tradeNo: tradeNo,
+                    currentPaymentId: null
+                })
+                .where(eq(orders.orderId, orderId));
+
+            try {
+                await createUserNotification({
+                    userId: order.userId,
+                    type: 'points_topup',
+                    titleKey: 'pointsPurchase.notificationTitle',
+                    contentKey: 'pointsPurchase.notificationBody',
+                    data: {
+                        params: { points },
+                        href: `/order/${orderId}`
+                    }
+                })
+            } catch {
+                // best effort
+            }
+
+            after(async () => {
+                try {
+                    const user = await db.query.loginUsers.findFirst({
+                        where: eq(users.userId, order.userId || ''),
+                        columns: { username: true }
+                    }).catch(() => null);
+
+                    await notifyAdminPaymentSuccess({
+                        orderId,
+                        productName: `Points Top-up (${points})`,
+                        amount: order.amount,
+                        username: user?.username,
+                        email: order.email,
+                        tradeNo
+                    });
+                } catch (err) {
+                    console.error('[Notification] Points top-up notify failed:', err);
+                }
+            })
+        }
+
         return { success: true, status: 'processed' };
     }
 

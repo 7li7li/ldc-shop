@@ -155,6 +155,7 @@
 | `AUTH_SECRET` | Secret | 随机字符串 (可用 `openssl rand -base64 32` 生成) |
 | `ADMIN_USERS` | Secret | 管理员用户名列表（支持 Linux DO 用户名和 GitHub 用户名 `gh_GitHub用户名`），逗号分隔。例如: `zhangsan,gh_octocat` |
 | `NEXT_PUBLIC_APP_URL` | **Text** | 你的 Workers 域名 (如 `https://ldc-shop.xxx.workers.dev`) |
+| `NEXT_PUBLIC_UPDATE_CHECK_REPO` | **Text** | 检测更新使用的 GitHub 仓库，fork 后可设为 `你的用户名/ldc-shop`；默认 `chatgptuk/ldc-shop` |
 
 > ⚠️ **重要**: `NEXT_PUBLIC_APP_URL` **必须**设置为 Text 类型，不能用 Secret，否则支付签名会失败！
 > ⚠️ **重要**: 若 GitHub 用户需要管理员权限，`ADMIN_USERS` 中**必须**填写 `gh_GitHub用户名`（例如 `gh_octocat`），不能只写原始 GitHub 用户名。
@@ -240,6 +241,7 @@
 | `AUTH_SECRET` | NextAuth 加密密钥（Secret） |
 | `ADMIN_USERS` | 管理员用户名列表，支持 Linux DO 用户名和 GitHub `gh_GitHub用户名` 用户名，逗号分隔。例如: `zhangsan,gh_octocat` |
 | `NEXT_PUBLIC_APP_URL` | 部署后的完整 URL (用于回调，必须 Text) |
+| `NEXT_PUBLIC_UPDATE_CHECK_REPO` | 检测更新使用的 GitHub 仓库，fork 后可设为 `你的用户名/ldc-shop`；默认 `chatgptuk/ldc-shop` |
 
 > ⚠️ 使用 GitHub 登录时，系统用户名会自动加前缀 `gh_`；如需管理员权限，`ADMIN_USERS` 中**必须**填写这个带前缀的用户名（例如 `gh_octocat`），不能只写 `octocat`。
 

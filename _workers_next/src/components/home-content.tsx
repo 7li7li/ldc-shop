@@ -15,6 +15,7 @@ import ReactMarkdown from "react-markdown"
 import { StarRatingStatic } from "@/components/star-rating-static"
 import { NavigationPill } from "@/components/navigation-pill"
 import { CheckInButton } from "@/components/checkin-button"
+import { PointsPurchaseButton } from "@/components/points-purchase-button"
 import { useI18n } from "@/lib/i18n/context"
 import { INFINITE_STOCK } from "@/lib/constants"
 
@@ -54,6 +55,8 @@ interface HomeContentProps {
     wishlistEnabled?: boolean
     isLoggedIn?: boolean
     checkinEnabled?: boolean
+    pointsPurchaseEnabled?: boolean
+    pointsPurchaseRate?: number
     filters: { q?: string; category?: string | null; sort?: string }
     pagination: { page: number; pageSize: number; total: number }
 }
@@ -68,6 +71,8 @@ export function HomeContent({
     wishlistEnabled = false,
     isLoggedIn = false,
     checkinEnabled = true,
+    pointsPurchaseEnabled = false,
+    pointsPurchaseRate = 1,
     filters,
     pagination,
 }: HomeContentProps) {
@@ -200,11 +205,14 @@ export function HomeContent({
                         </div>
                         <div className="flex w-full flex-col items-stretch gap-2 md:w-auto md:flex-row md:items-center md:justify-end md:gap-3">
                             {isLoggedIn && (
-                                <CheckInButton
-                                    enabled={checkinEnabled}
-                                    showCheckedInLabel
-                                    className="flex w-full md:w-auto"
-                                />
+                                <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
+                                    <CheckInButton
+                                        enabled={checkinEnabled}
+                                        showCheckedInLabel
+                                        className="flex w-full md:w-auto"
+                                    />
+                                    {pointsPurchaseEnabled && <PointsPurchaseButton rate={pointsPurchaseRate} />}
+                                </div>
                             )}
                             <div className="flex flex-wrap items-center gap-2 md:gap-3">
                                 {typeof visitorCount === "number" && (
