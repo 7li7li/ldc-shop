@@ -230,7 +230,7 @@
     "pointsPurchase": {
         "title": "Points Top-up",
         "buyButton": "Buy Points",
-        "description": "Current rate: 1 currency unit = {{rate}} points.",
+        "description": "Current rate: 1 LDC = {{rate}} points.",
         "preview": "Estimated top-up: {{points}} points",
         "disabled": "Points purchase is disabled.",
         "invalidPoints": "The amount is too low to convert to points.",
@@ -325,7 +325,7 @@
                 "enabled": "Enabled",
                 "disabled": "Disabled",
                 "rateLabel": "Exchange Rate",
-                "hint": "The rate means how many points users receive per 1 currency unit. For example, 10 means paying 1 grants 10 points."
+                "hint": "The rate means how many points users receive per 1 LDC. For example, 10 means paying 1 LDC grants 10 points."
             },
             "noIndex": {
                 "title": "Block Search Engines",
@@ -891,8 +891,8 @@
         "navEmpty": "No stores yet.",
         "visit": "Visit",
         "hideNavLabel": "Hide navigator entry",
-        "hideNavHint": "Hide the LDC navigator link if you haven't joined.",
-        "hideNavLockedHint": "After joining, the navigator entry must stay visible.",
+        "hideNavHint": "Hide the LDC navigator link in the header and mobile navigation.",
+        "hideNavLockedHint": "Hide the LDC navigator link in the header and mobile navigation.",
         "hideNavEnabled": "Hidden",
         "hideNavDisabled": "Visible"
     },

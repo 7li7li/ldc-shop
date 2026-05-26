@@ -810,17 +810,17 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, shopLog
                                 </Label>
                                 <Button
                                     id="registry-hide-nav"
-                                    variant={registryJoined ? "outline" : hideRegistryNav ? "default" : "outline"}
+                                    variant={hideRegistryNav ? "default" : "outline"}
                                     size="sm"
                                     onClick={() => handleToggleRegistryNav(!hideRegistryNav)}
-                                    disabled={savingRegistryNav || registryJoined}
-                                    className={!registryJoined && hideRegistryNav ? "bg-slate-900 hover:bg-slate-800 text-white" : ""}
+                                    disabled={savingRegistryNav}
+                                    className={hideRegistryNav ? "bg-slate-900 hover:bg-slate-800 text-white" : ""}
                                 >
-                                    {registryJoined ? t('registry.hideNavDisabled') : hideRegistryNav ? t('registry.hideNavEnabled') : t('registry.hideNavDisabled')}
+                                    {hideRegistryNav ? t('registry.hideNavEnabled') : t('registry.hideNavDisabled')}
                                 </Button>
                             </div>
                             <p className="text-xs text-muted-foreground">
-                                {registryJoined ? t('registry.hideNavLockedHint') : t('registry.hideNavHint')}
+                                {t('registry.hideNavHint')}
                             </p>
                         </div>
                     </CardContent>

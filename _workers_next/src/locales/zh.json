@@ -230,7 +230,7 @@
     "pointsPurchase": {
         "title": "积分充值",
         "buyButton": "购买积分",
-        "description": "当前兑换比例：1 金额单位 = {{rate}} 积分。",
+        "description": "当前兑换比例：1 LDC = {{rate}} 积分。",
         "preview": "预计到账：{{points}} 积分",
         "disabled": "积分购买暂未开启",
         "invalidPoints": "购买金额太低，无法兑换积分",
@@ -891,8 +891,8 @@
         "navEmpty": "暂无站点",
         "visit": "访问",
         "hideNavLabel": "隐藏导航入口",
-        "hideNavHint": "未加入导航时可隐藏顶部/底部的 LDC 导航入口。",
-        "hideNavLockedHint": "已加入导航后入口将始终显示，无法隐藏。",
+        "hideNavHint": "可隐藏顶部/底部的 LDC 导航入口。",
+        "hideNavLockedHint": "可隐藏顶部/底部的 LDC 导航入口。",
         "hideNavEnabled": "已隐藏",
         "hideNavDisabled": "显示中"
     },

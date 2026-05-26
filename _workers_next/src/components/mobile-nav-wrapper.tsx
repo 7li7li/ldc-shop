@@ -13,24 +13,16 @@ export async function MobileNavWrapper() {
     const isAdmin = user?.username && adminUsers.includes(user.username.toLowerCase()) || false
 
     const registryEnabled = isRegistryEnabled()
-    let registryOptIn = false
     let registryHideNav = false
     if (registryEnabled) {
         try {
-            const [optIn, hideNav] = await Promise.all([
-                getSetting('registry_opt_in'),
-                getSetting('registry_hide_nav')
-            ])
-            registryOptIn = optIn === 'true'
+            const hideNav = await getSetting('registry_hide_nav')
             registryHideNav = hideNav === 'true'
         } catch {
-            registryOptIn = false
             registryHideNav = false
         }
     }
-    // LDC navigator entry is intentionally hidden.
-    // const showNav = registryEnabled && (registryOptIn || !registryHideNav)
-    const showNav = false
+    const showNav = registryEnabled && !registryHideNav
 
     return <MobileNav isLoggedIn={!!user} isAdmin={isAdmin} showNav={showNav} />
 }

@@ -71,7 +71,6 @@ export async function joinRegistry(origin: string): Promise<RegistryResult> {
     }
 
     await setSetting("registry_opt_in", "true")
-    await setSetting("registry_hide_nav", "false")
     await setSetting("registry_prompted", "true")
     await setSetting("registry_last_submit_at", String(Date.now()))
 

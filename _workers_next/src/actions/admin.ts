@@ -722,9 +722,7 @@ export async function saveWishlistEnabled(enabled: boolean) {
 
 export async function saveRegistryHideNav(enabled: boolean) {
     await checkAdmin()
-    const optIn = await getSetting('registry_opt_in')
-    const shouldHide = enabled && optIn !== 'true'
-    await setSetting('registry_hide_nav', shouldHide ? 'true' : 'false')
+    await setSetting('registry_hide_nav', enabled ? 'true' : 'false')
     revalidatePath('/admin/settings')
     revalidatePath('/')
 }
