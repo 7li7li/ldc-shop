@@ -733,11 +733,21 @@ export async function saveLowStockThreshold(raw: string) {
     updateTag('home:product-categories')
 }
 
-export async function saveCheckinReward(raw: string) {
+export async function saveCheckinReward(rawMin: string, rawMax?: string) {
     await checkAdmin()
-    const n = Number.parseInt(String(raw || '').trim(), 10)
-    const value = Number.isFinite(n) && n > 0 ? String(n) : '10'
-    await setSetting('checkin_reward', value)
+    const min = Number.parseInt(String(rawMin || '').trim(), 10)
+    const max = Number.parseInt(String(rawMax ?? rawMin ?? '').trim(), 10)
+
+    if (!Number.isFinite(min) || min <= 0 || !Number.isFinite(max) || max <= 0) {
+        throw new Error("Check-in reward range must be positive integers")
+    }
+    if (max < min) {
+        throw new Error("Check-in reward max must be greater than or equal to min")
+    }
+
+    await setSetting('checkin_reward_min', String(min))
+    await setSetting('checkin_reward_max', String(max))
+    await setSetting('checkin_reward', String(min))
     revalidatePath('/admin/products')
     revalidatePath('/admin/settings')
     updateTag('home:products')

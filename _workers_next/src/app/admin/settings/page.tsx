@@ -31,7 +31,10 @@ export default async function AdminSettingsPage() {
     const themeFont = isThemeFont(settingsMap['theme_font'] || '') ? settingsMap['theme_font'] : DEFAULT_THEME_FONT
 
     const lowStockThreshold = Number.parseInt(settingsMap['low_stock_threshold'] || '5', 10) || 5
-    const checkinReward = Number.parseInt(settingsMap['checkin_reward'] || '10', 10) || 10
+    const legacyCheckinReward = Number.parseInt(settingsMap['checkin_reward'] || '10', 10) || 10
+    const checkinRewardMin = Number.parseInt(settingsMap['checkin_reward_min'] || String(legacyCheckinReward), 10) || legacyCheckinReward
+    const checkinRewardMaxRaw = Number.parseInt(settingsMap['checkin_reward_max'] || String(checkinRewardMin), 10) || checkinRewardMin
+    const checkinRewardMax = Math.max(checkinRewardMin, checkinRewardMaxRaw)
     const checkinEnabled = settingsMap['checkin_enabled'] !== 'false'
     const pointsPurchaseEnabled = settingsMap['points_purchase_enabled'] === 'true'
     const pointsPurchaseRate = Number.parseFloat(settingsMap['points_purchase_rate'] || '1') || 1
@@ -57,7 +60,8 @@ export default async function AdminSettingsPage() {
             themeFont={themeFont}
             visitorCount={visitorCount}
             lowStockThreshold={lowStockThreshold}
-            checkinReward={checkinReward}
+            checkinRewardMin={checkinRewardMin}
+            checkinRewardMax={checkinRewardMax}
             checkinEnabled={checkinEnabled}
             pointsPurchaseEnabled={pointsPurchaseEnabled}
             pointsPurchaseRate={pointsPurchaseRate}

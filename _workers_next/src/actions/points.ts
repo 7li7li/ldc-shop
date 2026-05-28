@@ -7,6 +7,22 @@ import { ensureLoginUsersSchema, getSetting } from "@/lib/db/queries"
 import { and, eq, isNull, lt, or, sql } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 
+function parsePositiveInt(value: string | null | undefined, fallback: number) {
+    const parsed = Number.parseInt(String(value ?? '').trim(), 10)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+async function getCheckinReward() {
+    const legacyRewardStr = await getSetting('checkin_reward')
+    const legacyReward = parsePositiveInt(legacyRewardStr, 10)
+    const min = parsePositiveInt(await getSetting('checkin_reward_min'), legacyReward)
+    const maxRaw = parsePositiveInt(await getSetting('checkin_reward_max'), min)
+    const max = Math.max(min, maxRaw)
+
+    if (min === max) return min
+    return Math.floor(Math.random() * (max - min + 1)) + min
+}
+
 export async function checkIn() {
     const session = await auth()
     if (!session?.user?.id) {
@@ -33,8 +49,7 @@ export async function checkIn() {
         const yesterdayStartUtcMs = todayStartUtcMs - 86400000
 
         // 2. Get Reward Amount
-        const rewardStr = await getSetting('checkin_reward')
-        const reward = parseInt(rewardStr || '10', 10)
+        const reward = await getCheckinReward()
 
         // 3. Perform Check-in & Award Points (atomic guard in DB)
         const updated = await db.update(loginUsers)

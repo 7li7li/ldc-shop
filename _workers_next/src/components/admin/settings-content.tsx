@@ -40,7 +40,8 @@ interface AdminSettingsContentProps {
     themeFont: string | null
     visitorCount: number
     lowStockThreshold: number
-    checkinReward: number
+    checkinRewardMin: number
+    checkinRewardMax: number
     checkinEnabled: boolean
     pointsPurchaseEnabled: boolean
     pointsPurchaseRate: number
@@ -73,7 +74,7 @@ const THEME_COLORS = [
 
 const SHOP_LOGO_UPLOAD_MAX_BYTES = 500 * 1024
 
-export function AdminSettingsContent({ stats, shopName, shopDescription, homeTitle, homeSubtitle, customerServiceUrl, customerServiceSvg, shopLogo, shopFooter, currencyUnit, themeColor, themeFont, visitorCount, lowStockThreshold, checkinReward, checkinEnabled, pointsPurchaseEnabled, pointsPurchaseRate, wishlistEnabled, noIndexEnabled, refundReclaimCards, registryHideNav, registryOptIn, registryEnabled, currentVersion }: AdminSettingsContentProps) {
+export function AdminSettingsContent({ stats, shopName, shopDescription, homeTitle, homeSubtitle, customerServiceUrl, customerServiceSvg, shopLogo, shopFooter, currencyUnit, themeColor, themeFont, visitorCount, lowStockThreshold, checkinRewardMin, checkinRewardMax, checkinEnabled, pointsPurchaseEnabled, pointsPurchaseRate, wishlistEnabled, noIndexEnabled, refundReclaimCards, registryHideNav, registryOptIn, registryEnabled, currentVersion }: AdminSettingsContentProps) {
     const { t } = useI18n()
     const router = useRouter()
     const shopLogoFileInputRef = useRef<HTMLInputElement | null>(null)
@@ -101,7 +102,8 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, homeTit
     const [savingThemeFont, setSavingThemeFont] = useState(false)
     const [thresholdValue, setThresholdValue] = useState(String(lowStockThreshold || 5))
     const [savingThreshold, setSavingThreshold] = useState(false)
-    const [rewardValue, setRewardValue] = useState(String(checkinReward || 10))
+    const [rewardMinValue, setRewardMinValue] = useState(String(checkinRewardMin || 10))
+    const [rewardMaxValue, setRewardMaxValue] = useState(String(checkinRewardMax || checkinRewardMin || 10))
     const [savingReward, setSavingReward] = useState(false)
     const [enabledCheckin, setEnabledCheckin] = useState(checkinEnabled)
     const [savingEnabled, setSavingEnabled] = useState(false)
@@ -258,7 +260,7 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, homeTit
     const handleSaveReward = async () => {
         setSavingReward(true)
         try {
-            await saveCheckinReward(rewardValue)
+            await saveCheckinReward(rewardMinValue, rewardMaxValue)
             toast.success(t('common.success'))
         } catch (e: any) {
             toast.error(e.message)
@@ -688,22 +690,37 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, homeTit
                         </Button>
                     </div>
                     {enabledCheckin && (
-                        <div className="grid gap-2 md:max-w-xs">
-                            <div className="flex gap-2">
+                        <div className="grid gap-2 md:max-w-xl">
+                            <div className="flex flex-col gap-2 sm:flex-row">
                                 <div className="floating-field flex-1 min-w-0">
                                     <Input
-                                        id="checkin-reward"
+                                        id="checkin-reward-min"
                                         type="number"
-                                        value={rewardValue}
-                                        onChange={(e) => setRewardValue(e.target.value)}
+                                        min="1"
+                                        step="1"
+                                        value={rewardMinValue}
+                                        onChange={(e) => setRewardMinValue(e.target.value)}
                                         placeholder=" "
                                     />
-                                    <Label htmlFor="checkin-reward" className="floating-label">{t('admin.settings.checkin.rewardTooltip')}</Label>
+                                    <Label htmlFor="checkin-reward-min" className="floating-label">{t('admin.settings.checkin.rewardMinTooltip')}</Label>
+                                </div>
+                                <div className="floating-field flex-1 min-w-0">
+                                    <Input
+                                        id="checkin-reward-max"
+                                        type="number"
+                                        min="1"
+                                        step="1"
+                                        value={rewardMaxValue}
+                                        onChange={(e) => setRewardMaxValue(e.target.value)}
+                                        placeholder=" "
+                                    />
+                                    <Label htmlFor="checkin-reward-max" className="floating-label">{t('admin.settings.checkin.rewardMaxTooltip')}</Label>
                                 </div>
                                 <Button variant="outline" onClick={handleSaveReward} disabled={savingReward}>
                                     {savingReward ? t('common.processing') : t('common.save')}
                                 </Button>
                             </div>
+                            <p className="text-xs text-muted-foreground">{t('admin.settings.checkin.rewardRangeHint')}</p>
                         </div>
                     )}
                 </CardContent>

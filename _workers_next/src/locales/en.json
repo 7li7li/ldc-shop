@@ -327,6 +327,9 @@
             "checkin": {
                 "title": "Check-in",
                 "rewardTooltip": "Check-in Reward (Points)",
+                "rewardMinTooltip": "Min Reward (Points)",
+                "rewardMaxTooltip": "Max Reward (Points)",
+                "rewardRangeHint": "Check-in grants a random whole-number reward between min and max. Use the same value for a fixed reward.",
                 "saveReward": "Save Points",
                 "enabled": "Enabled",
                 "disabled": "Disabled"

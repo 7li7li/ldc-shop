@@ -327,6 +327,9 @@
             "checkin": {
                 "title": "每日签到",
                 "rewardTooltip": "签到奖励 (积分)",
+                "rewardMinTooltip": "最小奖励 (积分)",
+                "rewardMaxTooltip": "最大奖励 (积分)",
+                "rewardRangeHint": "签到时会在最小值和最大值之间随机发放整数积分；两者相同则为固定奖励。",
                 "saveReward": "保存积分",
                 "enabled": "已启用",
                 "disabled": "已禁用"
