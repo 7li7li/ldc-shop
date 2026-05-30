@@ -35,6 +35,8 @@ export default async function AdminSettingsPage() {
     const checkinRewardMin = Number.parseInt(settingsMap['checkin_reward_min'] || String(legacyCheckinReward), 10) || legacyCheckinReward
     const checkinRewardMaxRaw = Number.parseInt(settingsMap['checkin_reward_max'] || String(checkinRewardMin), 10) || checkinRewardMin
     const checkinRewardMax = Math.max(checkinRewardMin, checkinRewardMaxRaw)
+    const checkinFixedRewardRaw = Number.parseInt(settingsMap['checkin_reward_fixed'] || String(checkinRewardMin), 10) || checkinRewardMin
+    const checkinFixedReward = Math.max(1, checkinFixedRewardRaw)
     const checkinEnabled = settingsMap['checkin_enabled'] !== 'false'
     const pointsPurchaseEnabled = settingsMap['points_purchase_enabled'] === 'true'
     const pointsPurchaseRate = Number.parseFloat(settingsMap['points_purchase_rate'] || '1') || 1
@@ -62,6 +64,7 @@ export default async function AdminSettingsPage() {
             lowStockThreshold={lowStockThreshold}
             checkinRewardMin={checkinRewardMin}
             checkinRewardMax={checkinRewardMax}
+            checkinFixedReward={checkinFixedReward}
             checkinEnabled={checkinEnabled}
             pointsPurchaseEnabled={pointsPurchaseEnabled}
             pointsPurchaseRate={pointsPurchaseRate}

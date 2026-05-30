@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { TrendingUp, ShoppingCart, CreditCard, Package, Users } from "lucide-react"
-import { saveShopName, saveShopDescription, saveHomeIntro, saveCustomerService, saveShopLogo, saveShopFooter, saveThemeColor, saveThemeFont, saveLowStockThreshold, saveCheckinReward, saveCheckinEnabled, saveWishlistEnabled, saveNoIndex, saveRefundReclaimCards, saveRegistryHideNav, saveCurrencyUnit, savePointsPurchaseSettings } from "@/actions/admin"
+import { saveShopName, saveShopDescription, saveHomeIntro, saveCustomerService, saveShopLogo, saveShopFooter, saveThemeColor, saveThemeFont, saveLowStockThreshold, saveCheckinReward, saveCheckinFixedReward, saveCheckinEnabled, saveWishlistEnabled, saveNoIndex, saveRefundReclaimCards, saveRegistryHideNav, saveCurrencyUnit, savePointsPurchaseSettings } from "@/actions/admin"
 import { joinRegistry, leaveRegistry } from "@/actions/registry"
 import { checkForUpdatesClient, type ClientUpdateCheckResult } from "@/lib/update-check-client"
 import { toast } from "sonner"
@@ -42,6 +42,7 @@ interface AdminSettingsContentProps {
     lowStockThreshold: number
     checkinRewardMin: number
     checkinRewardMax: number
+    checkinFixedReward: number
     checkinEnabled: boolean
     pointsPurchaseEnabled: boolean
     pointsPurchaseRate: number
@@ -74,7 +75,7 @@ const THEME_COLORS = [
 
 const SHOP_LOGO_UPLOAD_MAX_BYTES = 500 * 1024
 
-export function AdminSettingsContent({ stats, shopName, shopDescription, homeTitle, homeSubtitle, customerServiceUrl, customerServiceSvg, shopLogo, shopFooter, currencyUnit, themeColor, themeFont, visitorCount, lowStockThreshold, checkinRewardMin, checkinRewardMax, checkinEnabled, pointsPurchaseEnabled, pointsPurchaseRate, wishlistEnabled, noIndexEnabled, refundReclaimCards, registryHideNav, registryOptIn, registryEnabled, currentVersion }: AdminSettingsContentProps) {
+export function AdminSettingsContent({ stats, shopName, shopDescription, homeTitle, homeSubtitle, customerServiceUrl, customerServiceSvg, shopLogo, shopFooter, currencyUnit, themeColor, themeFont, visitorCount, lowStockThreshold, checkinRewardMin, checkinRewardMax, checkinFixedReward, checkinEnabled, pointsPurchaseEnabled, pointsPurchaseRate, wishlistEnabled, noIndexEnabled, refundReclaimCards, registryHideNav, registryOptIn, registryEnabled, currentVersion }: AdminSettingsContentProps) {
     const { t } = useI18n()
     const router = useRouter()
     const shopLogoFileInputRef = useRef<HTMLInputElement | null>(null)
@@ -104,7 +105,9 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, homeTit
     const [savingThreshold, setSavingThreshold] = useState(false)
     const [rewardMinValue, setRewardMinValue] = useState(String(checkinRewardMin || 10))
     const [rewardMaxValue, setRewardMaxValue] = useState(String(checkinRewardMax || checkinRewardMin || 10))
+    const [rewardFixedValue, setRewardFixedValue] = useState(String(checkinFixedReward || checkinRewardMin || 10))
     const [savingReward, setSavingReward] = useState(false)
+    const [savingFixedReward, setSavingFixedReward] = useState(false)
     const [enabledCheckin, setEnabledCheckin] = useState(checkinEnabled)
     const [savingEnabled, setSavingEnabled] = useState(false)
     const [pointsPurchaseEnabledValue, setPointsPurchaseEnabledValue] = useState(pointsPurchaseEnabled)
@@ -266,6 +269,18 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, homeTit
             toast.error(e.message)
         } finally {
             setSavingReward(false)
+        }
+    }
+
+    const handleSaveFixedReward = async () => {
+        setSavingFixedReward(true)
+        try {
+            await saveCheckinFixedReward(rewardFixedValue)
+            toast.success(t('common.success'))
+        } catch (e: any) {
+            toast.error(e.message)
+        } finally {
+            setSavingFixedReward(false)
         }
     }
 
@@ -721,6 +736,24 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, homeTit
                                 </Button>
                             </div>
                             <p className="text-xs text-muted-foreground">{t('admin.settings.checkin.rewardRangeHint')}</p>
+                            <div className="flex flex-col gap-2 sm:flex-row">
+                                <div className="floating-field flex-1 min-w-0">
+                                    <Input
+                                        id="checkin-reward-fixed"
+                                        type="number"
+                                        min="1"
+                                        step="1"
+                                        value={rewardFixedValue}
+                                        onChange={(e) => setRewardFixedValue(e.target.value)}
+                                        placeholder=" "
+                                    />
+                                    <Label htmlFor="checkin-reward-fixed" className="floating-label">{t('admin.settings.checkin.fixedRewardTooltip')}</Label>
+                                </div>
+                                <Button variant="outline" onClick={handleSaveFixedReward} disabled={savingFixedReward}>
+                                    {savingFixedReward ? t('common.processing') : t('common.save')}
+                                </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground">{t('admin.settings.checkin.fixedRewardHint')}</p>
                         </div>
                     )}
                 </CardContent>

@@ -330,6 +330,8 @@
                 "rewardMinTooltip": "Min Reward (Points)",
                 "rewardMaxTooltip": "Max Reward (Points)",
                 "rewardRangeHint": "Check-in grants a random whole-number reward between min and max. Use the same value for a fixed reward.",
+                "fixedRewardTooltip": "Fixed Reward (Points)",
+                "fixedRewardHint": "Granted when users choose the fixed option.",
                 "saveReward": "Save Points",
                 "enabled": "Enabled",
                 "disabled": "Disabled"
@@ -864,6 +866,12 @@
     },
     "checkin": {
         "button": "Check In",
+        "chooseModeTitle": "Choose a reward mode",
+        "chooseModeDescription": "Pick how you want to receive today's check-in reward.",
+        "modeRandom": "Try your luck",
+        "modeRandomHint": "{{min}}-{{max}} points (random)",
+        "modeFixed": "Points x{{points}}",
+        "modeFixedHint": "Admin configured points",
         "checkedIn": "Checked in",
         "success": "Check-in successful! +{{points}} points",
         "alreadyCheckedIn": "Already checked in today",

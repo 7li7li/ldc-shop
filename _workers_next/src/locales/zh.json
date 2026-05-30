@@ -330,6 +330,8 @@
                 "rewardMinTooltip": "最小奖励 (积分)",
                 "rewardMaxTooltip": "最大奖励 (积分)",
                 "rewardRangeHint": "签到时会在最小值和最大值之间随机发放整数积分；两者相同则为固定奖励。",
+                "fixedRewardTooltip": "固定奖励 (积分)",
+                "fixedRewardHint": "用户选择固定奖励模式时发放的积分。",
                 "saveReward": "保存积分",
                 "enabled": "已启用",
                 "disabled": "已禁用"
@@ -864,6 +866,12 @@
     },
     "checkin": {
         "button": "签到",
+        "chooseModeTitle": "选择签到模式",
+        "chooseModeDescription": "请选择本次签到的奖励方式。",
+        "modeRandom": "试试手气",
+        "modeRandomHint": "{{min}}-{{max}} 积分 (随机)",
+        "modeFixed": "积分x{{points}}",
+        "modeFixedHint": "后台设置的积分",
         "checkedIn": "已签到",
         "success": "签到成功！+{{points}} 积分",
         "alreadyCheckedIn": "今天已签到",

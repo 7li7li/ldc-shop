@@ -754,6 +754,21 @@ export async function saveCheckinReward(rawMin: string, rawMax?: string) {
     updateTag('home:product-categories')
 }
 
+export async function saveCheckinFixedReward(raw: string) {
+    await checkAdmin()
+    const fixed = Number.parseInt(String(raw || '').trim(), 10)
+
+    if (!Number.isFinite(fixed) || fixed <= 0) {
+        throw new Error("Check-in fixed reward must be a positive integer")
+    }
+
+    await setSetting('checkin_reward_fixed', String(fixed))
+    revalidatePath('/admin/products')
+    revalidatePath('/admin/settings')
+    updateTag('home:products')
+    updateTag('home:product-categories')
+}
+
 export async function saveCheckinEnabled(enabled: boolean) {
     await checkAdmin()
     await setSetting('checkin_enabled', enabled ? 'true' : 'false')
