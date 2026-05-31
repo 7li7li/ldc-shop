@@ -871,7 +871,7 @@
         "modeRandom": "Try your luck",
         "modeRandomHint": "{{min}}-{{max}} points (random)",
         "modeFixed": "Points x{{points}}",
-        "modeFixedHint": "Admin configured points",
+        "modeFixedHint": "Fixed points",
         "checkedIn": "Checked in",
         "success": "Check-in successful! +{{points}} points",
         "alreadyCheckedIn": "Already checked in today",

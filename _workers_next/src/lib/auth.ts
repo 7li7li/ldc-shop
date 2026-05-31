@@ -12,7 +12,10 @@ const providers: any[] = [
         id: "linuxdo",
         name: "Linux DO",
         type: "oauth",
-        authorization: "https://connect.linux.do/oauth2/authorize",
+        authorization: {
+            url: "https://connect.linux.do/oauth2/authorize",
+            params: { scope: "openid profile email" },
+        },
         token: {
             url: "https://connect.linux.do/oauth2/token",
             async conform(response: Response) {
@@ -45,8 +48,14 @@ const providers: any[] = [
         clientId: process.env.OAUTH_CLIENT_ID,
         clientSecret: process.env.OAUTH_CLIENT_SECRET,
         profile(profile: any) {
+            const profileId = getLinuxDoProfileId(profile)
+            if (!profileId) {
+                console.error("[auth] linuxdo profile id missing in provider profile", getLinuxDoProfileDebug(profile))
+                throw new Error("LINUXDO_PROFILE_ID_MISSING")
+            }
+
             return {
-                id: String(profile.id),
+                id: profileId,
                 name: profile.username || profile.name,
                 email: profile.email,
                 image: profile.avatar_url,
@@ -82,6 +91,23 @@ function normalizeAuthScalar(rawValue: unknown): string | null {
     const lowered = normalized.toLowerCase()
     if (lowered === "undefined" || lowered === "null" || lowered === "nan") return null
     return normalized
+}
+
+function getLinuxDoProfileId(profile: any): string | null {
+    return normalizeAuthScalar(profile?.id)
+        || normalizeAuthScalar(profile?.sub)
+        || normalizeAuthScalar(profile?.user_id)
+        || normalizeAuthScalar(profile?.userId)
+}
+
+function getLinuxDoProfileDebug(profile: any) {
+    return {
+        profileId: profile?.id ?? null,
+        sub: profile?.sub ?? null,
+        userId: profile?.user_id ?? profile?.userId ?? null,
+        username: profile?.username ?? null,
+        keys: profile && typeof profile === "object" ? Object.keys(profile) : [],
+    }
 }
 
 function normalizeGitHubUserId(rawId?: string | null) {
@@ -355,17 +381,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 let resolvedUsername = user.username ? String(user.username) : null
 
                 if (account?.provider === "linuxdo") {
-                    // Match legacy working behavior: Linux DO id must come from profile.id only.
-                    const rawLinuxDoId = (profile as any)?.id
-                    const linuxDoId =
-                        rawLinuxDoId === undefined || rawLinuxDoId === null
-                            ? null
-                            : String(rawLinuxDoId).trim()
+                    const linuxDoId = getLinuxDoProfileId(profile)
                     if (!linuxDoId) {
-                        console.error("[auth] linuxdo profile.id missing in jwt callback", {
-                            profileId: (profile as any)?.id ?? null,
-                            username: (profile as any)?.username ?? null,
-                        })
+                        console.error("[auth] linuxdo profile id missing in jwt callback", getLinuxDoProfileDebug(profile))
                         throw new Error("LINUXDO_PROFILE_ID_MISSING")
                     }
 
@@ -418,16 +436,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             }
 
             if (profile && account?.provider === "linuxdo") {
-                const rawLinuxDoId = (profile as any)?.id
-                const linuxDoId =
-                    rawLinuxDoId === undefined || rawLinuxDoId === null
-                        ? null
-                        : String(rawLinuxDoId).trim()
+                const linuxDoId = getLinuxDoProfileId(profile)
                 if (!linuxDoId) {
-                    console.error("[auth] linuxdo profile.id missing in profile callback", {
-                        profileId: (profile as any)?.id ?? null,
-                        username: (profile as any)?.username ?? null,
-                    })
+                    console.error("[auth] linuxdo profile id missing in profile callback", getLinuxDoProfileDebug(profile))
                     throw new Error("LINUXDO_PROFILE_ID_MISSING")
                 }
 

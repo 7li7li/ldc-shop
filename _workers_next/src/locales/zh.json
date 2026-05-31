@@ -871,7 +871,7 @@
         "modeRandom": "试试手气",
         "modeRandomHint": "{{min}}-{{max}} 积分 (随机)",
         "modeFixed": "积分x{{points}}",
-        "modeFixedHint": "后台设置的积分",
+        "modeFixedHint": "固定积分",
         "checkedIn": "已签到",
         "success": "签到成功！+{{points}} 积分",
         "alreadyCheckedIn": "今天已签到",
