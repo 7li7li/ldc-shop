@@ -39,6 +39,7 @@
         "sold": "已售",
         "buy": "购买",
         "buyNow": "立即购买",
+        "goToPurchase": "前往购买",
         "payNow": "立即支付",
         "processing": "处理中...",
         "viewDetails": "查看详情",
@@ -568,6 +569,7 @@
             "show": "上架",
             "actions": "操作",
             "manageCards": "卡密",
+            "externalLink": "跳转商品",
             "confirmDelete": "确定要删除此商品吗？"
         },
         "users": {
@@ -697,6 +699,10 @@
             "pricePlaceholder": "0.00",
             "compareAtPriceLabel": "原价（可选）",
             "compareAtPricePlaceholder": "例如 99.00",
+            "purchaseUrlLabel": "购买跳转链接（可选）",
+            "purchaseUrlPlaceholder": "https://example.com/buy",
+            "purchaseUrlHint": "填写后将直接跳转，无需库存或卡密。",
+            "purchaseUrlInvalid": "请输入有效的 http:// 或 https:// 链接",
             "categoryLabel": "分类",
             "categoryPlaceholder": "通用",
             "visibilityLabel": "可见范围",

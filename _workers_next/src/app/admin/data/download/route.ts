@@ -332,6 +332,7 @@ export async function GET(req: Request) {
           sortOrder: 'sort_order',
           purchaseLimit: 'purchase_limit',
           purchaseWarning: 'purchase_warning',
+          purchaseUrl: 'purchase_url',
           visibilityLevel: 'visibility_level',
           stockCount: 'stock_count',
           lockedCount: 'locked_count',

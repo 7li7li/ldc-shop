@@ -14,6 +14,7 @@ import { sendOrderEmail } from "@/lib/email"
 import { INFINITE_STOCK, RESERVATION_TTL_MS } from "@/lib/constants"
 import { pullOneCardFromApi } from "@/lib/card-api"
 import { resolveSiteBaseUrl } from "@/lib/site-url"
+import { getSafePurchaseUrl } from "@/lib/purchase-url"
 
 const MAX_ORDER_QUANTITY = 10000
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -60,10 +61,16 @@ export async function createOrder(productId: string, quantity: number = 1, email
             price: true,
             purchaseLimit: true,
             isShared: true,
+            purchaseUrl: true,
             purchaseQuestions: true
         }
     })
     if (!product) return { success: false, error: 'buy.productNotFound' }
+
+    const externalPurchaseUrl = getSafePurchaseUrl(product.purchaseUrl)
+    if (externalPurchaseUrl) {
+        return { success: true, isExternal: true, url: externalPurchaseUrl }
+    }
 
     if (product.purchaseQuestions) {
         try {

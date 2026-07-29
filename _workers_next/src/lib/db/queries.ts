@@ -9,7 +9,7 @@ import { cache } from "react";
 let dbInitialized = false;
 let loginUsersSchemaReady = false;
 let wishlistTablesReady = false;
-const CURRENT_SCHEMA_VERSION = 20;
+const CURRENT_SCHEMA_VERSION = 21;
 type ColumnEnsureKey = 'products' | 'orders' | 'cards' | 'loginUsers';
 const columnEnsureState: Record<ColumnEnsureKey, { ready: boolean; pending: Promise<void> | null }> = {
     products: { ready: false, pending: null },
@@ -221,6 +221,7 @@ async function ensureDatabaseInitialized() {
             sort_order INTEGER DEFAULT 0,
             purchase_limit INTEGER,
             purchase_warning TEXT,
+            purchase_url TEXT,
             visibility_level INTEGER DEFAULT -1,
             stock_count INTEGER DEFAULT 0,
             locked_count INTEGER DEFAULT 0,
@@ -433,6 +434,7 @@ async function ensureProductsColumns() {
         await safeAddColumn('products', 'compare_at_price', 'TEXT');
         await safeAddColumn('products', 'is_hot', 'INTEGER DEFAULT 0');
         await safeAddColumn('products', 'purchase_warning', 'TEXT');
+        await safeAddColumn('products', 'purchase_url', 'TEXT');
         await safeAddColumn('products', 'is_shared', 'INTEGER DEFAULT 0');
         await safeAddColumn('products', 'visibility_level', 'INTEGER DEFAULT -1');
         await safeAddColumn('products', 'stock_count', 'INTEGER DEFAULT 0');
@@ -863,6 +865,7 @@ export async function getProducts() {
             visibilityLevel: products.visibilityLevel,
             sortOrder: products.sortOrder,
             purchaseLimit: products.purchaseLimit,
+            purchaseUrl: products.purchaseUrl,
             variantGroupId: products.variantGroupId,
             variantLabel: products.variantLabel,
             stock: sql<number>`COALESCE(${products.stockCount}, 0)`,
@@ -903,6 +906,7 @@ export async function getActiveProducts(options?: { isLoggedIn?: boolean; trustL
             isHot: products.isHot,
             isShared: products.isShared,
             purchaseLimit: products.purchaseLimit,
+            purchaseUrl: products.purchaseUrl,
             visibilityLevel: products.visibilityLevel,
             sortOrder: products.sortOrder,
             createdAt: products.createdAt,
@@ -1072,6 +1076,7 @@ export async function getProduct(id: string, options?: { isLoggedIn?: boolean; t
             sold: sql<number>`COALESCE(${products.soldCount}, 0)`,
             purchaseLimit: products.purchaseLimit,
             purchaseWarning: products.purchaseWarning,
+            purchaseUrl: products.purchaseUrl,
             visibilityLevel: products.visibilityLevel,
             stock: sql<number>`COALESCE(${products.stockCount}, 0)`,
             locked: sql<number>`COALESCE(${products.lockedCount}, 0)`,
@@ -1124,6 +1129,7 @@ export type ProductVariantRow = {
     purchaseLimit: number | null;
     isHot: boolean | null;
     purchaseWarning: string | null;
+    purchaseUrl: string | null;
     purchaseQuestions: string | null;
 };
 
@@ -1148,6 +1154,7 @@ export async function getProductVariants(
             purchaseLimit: products.purchaseLimit,
             isHot: products.isHot,
             purchaseWarning: products.purchaseWarning,
+            purchaseUrl: products.purchaseUrl,
             purchaseQuestions: products.purchaseQuestions,
         })
             .from(products)
@@ -1190,6 +1197,7 @@ export async function getProductForAdmin(id: string) {
             isShared: products.isShared,
             purchaseLimit: products.purchaseLimit,
             purchaseWarning: products.purchaseWarning,
+            purchaseUrl: products.purchaseUrl,
             visibilityLevel: products.visibilityLevel,
             variantGroupId: products.variantGroupId,
             variantLabel: products.variantLabel,
@@ -1508,6 +1516,7 @@ export async function searchActiveProducts(params: {
             isHot: products.isHot,
             isShared: products.isShared,
             purchaseLimit: products.purchaseLimit,
+            purchaseUrl: products.purchaseUrl,
             sortOrder: products.sortOrder,
             createdAt: products.createdAt,
             variantGroupId: products.variantGroupId,

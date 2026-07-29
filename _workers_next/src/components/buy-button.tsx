@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Loader2, Coins } from "lucide-react"
+import { Loader2, Coins, ExternalLink } from "lucide-react"
 import { toast } from "sonner"
 import { useI18n } from "@/lib/i18n/context"
 import { cn } from "@/lib/utils"
+import { getSafePurchaseUrl } from "@/lib/purchase-url"
 
 interface BuyButtonProps {
     productId: string
@@ -22,9 +23,10 @@ interface BuyButtonProps {
     emailConfigured?: boolean
     answers?: string[]
     className?: string
+    purchaseUrl?: string | null
 }
 
-export function BuyButton({ productId, price, productName, disabled, quantity = 1, autoOpen = false, emailConfigured = false, answers, className }: BuyButtonProps) {
+export function BuyButton({ productId, price, productName, disabled, quantity = 1, autoOpen = false, emailConfigured = false, answers, className, purchaseUrl }: BuyButtonProps) {
     const [loading, setLoading] = useState(false)
     const [open, setOpen] = useState(false)
     const [points, setPoints] = useState(0)
@@ -34,11 +36,12 @@ export function BuyButton({ productId, price, productName, disabled, quantity = 
     const [email, setEmail] = useState('')
     const isNavigatingRef = useRef(false)
     const { t } = useI18n()
+    const externalPurchaseUrl = getSafePurchaseUrl(purchaseUrl)
 
     const numericalPrice = Number(price) * quantity
 
     const openDialog = async () => {
-        if (disabled) return
+        if (disabled || externalPurchaseUrl) return
         setOpen(true)
         setPointsLoading(true)
         try {
@@ -55,11 +58,11 @@ export function BuyButton({ productId, price, productName, disabled, quantity = 
 
     // Auto-open dialog when autoOpen is true (after warning confirmation)
     useEffect(() => {
-        if (autoOpen && !hasAutoOpened && !disabled) {
+        if (autoOpen && !hasAutoOpened && !disabled && !externalPurchaseUrl) {
             setHasAutoOpened(true)
             openDialog()
         }
-    }, [autoOpen, hasAutoOpened, disabled])
+    }, [autoOpen, hasAutoOpened, disabled, externalPurchaseUrl])
 
     const handleInitialClick = async () => {
         await openDialog()
@@ -76,6 +79,12 @@ export function BuyButton({ productId, price, productName, disabled, quantity = 
                 const message = result?.error ? t(result.error) : t('common.error')
                 toast.error(message)
                 if (!isNavigatingRef.current) setLoading(false)
+                return
+            }
+
+            if (result.isExternal && result.url) {
+                isNavigatingRef.current = true
+                window.location.href = result.url
                 return
             }
 
@@ -128,6 +137,24 @@ export function BuyButton({ productId, price, productName, disabled, quantity = 
     // Calculation for UI
     const pointsToUse = usePoints ? Math.min(points, Math.ceil(numericalPrice)) : 0
     const finalPrice = Math.max(0, numericalPrice - pointsToUse)
+
+    if (externalPurchaseUrl) {
+        return (
+            <Button
+                asChild
+                size="lg"
+                className={cn(
+                    "h-12 w-full rounded-xl bg-primary px-6 font-medium text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/25 active:scale-[0.99]",
+                    className
+                )}
+            >
+                <a href={externalPurchaseUrl} target="_blank" rel="noopener noreferrer">
+                    {t('common.goToPurchase')}
+                    <ExternalLink className="ml-2 h-4 w-4" />
+                </a>
+            </Button>
+        )
+    }
 
     return (
         <>

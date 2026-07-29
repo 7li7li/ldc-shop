@@ -19,7 +19,7 @@ import {
     DialogTrigger
 } from "@/components/ui/dialog"
 import ReactMarkdown from 'react-markdown'
-import { ChevronLeft, ChevronRight, Expand, Loader2, Minus, Plus, Share2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Expand, ExternalLink, Loader2, Minus, Plus, Share2 } from "lucide-react"
 import { ProductImagePlaceholder } from "@/components/product-image-placeholder"
 import { toast } from "sonner"
 import Image from "next/image"
@@ -27,6 +27,7 @@ import { INFINITE_STOCK } from "@/lib/constants"
 import { getBuyPageMeta } from "@/actions/buy"
 import type { ProductVariantRow } from "@/lib/db/queries"
 import { buildProductImageGallery } from "@/lib/product-images"
+import { getSafePurchaseUrl } from "@/lib/purchase-url"
 
 interface Product {
     id: string
@@ -39,6 +40,7 @@ interface Product {
     category: string | null
     purchaseLimit?: number | null
     purchaseWarning?: string | null
+    purchaseUrl?: string | null
     purchaseQuestions?: string | null
     isHot?: boolean | null
     sold?: number
@@ -123,6 +125,7 @@ export function BuyContent({
                     category: product.category,
                     purchaseLimit: v.purchaseLimit,
                     purchaseWarning: v.purchaseWarning ?? null,
+                    purchaseUrl: v.purchaseUrl ?? null,
                     purchaseQuestions: v.purchaseQuestions ?? null,
                     isHot: v.isHot ?? false,
                 } satisfies Product
@@ -130,6 +133,12 @@ export function BuyContent({
         }
         return product
     }, [product, variants, selectedVariantId])
+
+    const externalPurchaseUrl = useMemo(
+        () => getSafePurchaseUrl(displayProduct.purchaseUrl),
+        [displayProduct.purchaseUrl]
+    )
+    const isExternalProduct = Boolean(externalPurchaseUrl)
 
     const displayStock = useMemo(() => {
         if (variants.length > 1 && selectedVariantId) {
@@ -197,7 +206,7 @@ export function BuyContent({
     }
 
     const hasQuestions = questions.length > 0
-    const needsQuestionVerification = hasQuestions && !questionsVerified
+    const needsQuestionVerification = !isExternalProduct && hasQuestions && !questionsVerified
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
@@ -272,8 +281,8 @@ export function BuyContent({
     }
 
     const hasUnlimitedStock = displayStock >= INFINITE_STOCK
-    const hasStock = displayStock > 0 || hasUnlimitedStock
-    const maxStock = hasUnlimitedStock ? INFINITE_STOCK : (displayStock - displayLocked)
+    const hasStock = isExternalProduct || displayStock > 0 || hasUnlimitedStock
+    const maxStock = isExternalProduct ? 1 : (hasUnlimitedStock ? INFINITE_STOCK : (displayStock - displayLocked))
     const maxSelectableQuantity = displayProduct.purchaseLimit && displayProduct.purchaseLimit > 0
         ? Math.min(maxStock, displayProduct.purchaseLimit)
         : maxStock
@@ -301,7 +310,7 @@ export function BuyContent({
         setSelectedGalleryImage(galleryImages[nextIndex] ?? null)
     }
 
-    const showInlineShareAction = isLoggedIn && hasStock && !needsQuestionVerification
+    const showInlineShareAction = (isExternalProduct || isLoggedIn) && hasStock && !needsQuestionVerification
 
     const renderShareButton = (inline = false) => (
         <Dialog>
@@ -549,18 +558,20 @@ export function BuyContent({
                                     </div>
 
                                     <div className="flex flex-wrap gap-2">
-                                        <Badge
-                                            variant={displayStock > 0 ? "outline" : "destructive"}
-                                            className={displayStock > 0 ? "rounded-lg border-primary/25 bg-primary/5 px-3 py-1.5 text-primary font-medium" : "rounded-lg px-3 py-1.5 font-medium"}
-                                        >
-                                            {stockLabel}
-                                        </Badge>
+                                        {!isExternalProduct && (
+                                            <Badge
+                                                variant={displayStock > 0 ? "outline" : "destructive"}
+                                                className={displayStock > 0 ? "rounded-lg border-primary/25 bg-primary/5 px-3 py-1.5 text-primary font-medium" : "rounded-lg px-3 py-1.5 font-medium"}
+                                            >
+                                                {stockLabel}
+                                            </Badge>
+                                        )}
                                         {displaySold > 0 && (
                                             <Badge variant="secondary" className="rounded-lg border border-border/40 bg-muted/40 px-3 py-1.5 font-medium">
                                                 {t('common.sold')}: {displaySold}
                                             </Badge>
                                         )}
-                                        {typeof displayProduct.purchaseLimit === 'number' && displayProduct.purchaseLimit > 0 && (
+                                        {!isExternalProduct && typeof displayProduct.purchaseLimit === 'number' && displayProduct.purchaseLimit > 0 && (
                                             <Badge variant="secondary" className="rounded-lg border border-border/40 bg-muted/40 px-3 py-1.5 font-medium">
                                                 {t('buy.purchaseLimit', { limit: displayProduct.purchaseLimit })}
                                             </Badge>
@@ -605,7 +616,7 @@ export function BuyContent({
                                     </div>
                                 )}
 
-                                {isLoggedIn && hasStock && !needsQuestionVerification && (
+                                {!isExternalProduct && isLoggedIn && hasStock && !needsQuestionVerification && (
                                     <div className="rounded-2xl border border-border/25 bg-muted/20 p-4">
                                         <div className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
                                             {t('buy.modal.total')}
@@ -661,7 +672,7 @@ export function BuyContent({
                                 )}
 
                                 <div className="space-y-3">
-                                    {isLoggedIn ? (
+                                    {isExternalProduct || isLoggedIn ? (
                                         needsQuestionVerification ? (
                                             <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-4 text-amber-800 dark:text-amber-200">
                                                 <p className="text-sm font-medium">{t('buy.answersRequired')}</p>
@@ -675,7 +686,8 @@ export function BuyContent({
                                                                 size="lg"
                                                                 className="h-11 flex-1 rounded-full bg-primary px-5 font-medium text-primary-foreground shadow-[0_16px_34px_-20px_rgba(15,23,42,0.55)] transition-all hover:bg-primary/90 hover:shadow-[0_18px_40px_-22px_rgba(15,23,42,0.6)] active:scale-[0.99]"
                                                             >
-                                                                {t('common.buyNow')}
+                                                                {isExternalProduct ? t('common.goToPurchase') : t('common.buyNow')}
+                                                                {isExternalProduct && <ExternalLink className="ml-2 h-4 w-4" />}
                                                             </Button>
                                                         </DialogTrigger>
                                                         <DialogContent className="rounded-2xl sm:max-w-md">
@@ -700,15 +712,29 @@ export function BuyContent({
                                                                 >
                                                                     {t('common.cancel')}
                                                                 </Button>
-                                                                <Button
-                                                                    onClick={() => {
-                                                                        setWarningConfirmed(true)
-                                                                        setShowWarningDialog(false)
-                                                                    }}
-                                                                    className="rounded-xl bg-primary font-medium text-primary-foreground hover:bg-primary/90"
-                                                                >
-                                                                    {t('buy.confirmWarning')}
-                                                                </Button>
+                                                                {externalPurchaseUrl ? (
+                                                                    <Button asChild className="rounded-xl bg-primary font-medium text-primary-foreground hover:bg-primary/90">
+                                                                        <a
+                                                                            href={externalPurchaseUrl}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            onClick={() => setShowWarningDialog(false)}
+                                                                        >
+                                                                            {t('common.goToPurchase')}
+                                                                            <ExternalLink className="ml-2 h-4 w-4" />
+                                                                        </a>
+                                                                    </Button>
+                                                                ) : (
+                                                                    <Button
+                                                                        onClick={() => {
+                                                                            setWarningConfirmed(true)
+                                                                            setShowWarningDialog(false)
+                                                                        }}
+                                                                        className="rounded-xl bg-primary font-medium text-primary-foreground hover:bg-primary/90"
+                                                                    >
+                                                                        {t('buy.confirmWarning')}
+                                                                    </Button>
+                                                                )}
                                                             </div>
                                                         </DialogContent>
                                                     </Dialog>
@@ -724,6 +750,7 @@ export function BuyContent({
                                                         autoOpen={warningConfirmed && !!displayProduct.purchaseWarning}
                                                         emailConfigured={emailConfiguredState}
                                                         answers={hasQuestions ? questionAnswers : undefined}
+                                                        purchaseUrl={externalPurchaseUrl}
                                                         className="h-11 flex-1 rounded-full bg-primary px-5 font-medium text-primary-foreground shadow-[0_16px_34px_-20px_rgba(15,23,42,0.55)] transition-all hover:bg-primary/90 hover:shadow-[0_18px_40px_-22px_rgba(15,23,42,0.6)]"
                                                     />
                                                     {renderShareButton(true)}
@@ -768,9 +795,11 @@ export function BuyContent({
                                     </div>
                                 )}
 
-                                <div className="rounded-xl border border-border/20 bg-muted/10 px-4 py-3 text-xs leading-relaxed text-muted-foreground">
-                                    {t('buy.paymentTimeoutNotice')}
-                                </div>
+                                {!isExternalProduct && (
+                                    <div className="rounded-xl border border-border/20 bg-muted/10 px-4 py-3 text-xs leading-relaxed text-muted-foreground">
+                                        {t('buy.paymentTimeoutNotice')}
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
                     </div>

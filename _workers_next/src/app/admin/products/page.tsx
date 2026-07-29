@@ -39,7 +39,8 @@ export default async function AdminPage() {
                 isHot: p.isHot ?? false,
                 sortOrder: p.sortOrder ?? 0,
                 variantGroupId: p.variantGroupId ?? null,
-                variantLabel: p.variantLabel ?? null
+                variantLabel: p.variantLabel ?? null,
+                purchaseUrl: p.purchaseUrl ?? null
             }})}
             lowStockThreshold={lowStockThreshold}
         />

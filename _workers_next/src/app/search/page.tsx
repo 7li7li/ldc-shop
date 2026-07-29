@@ -76,6 +76,7 @@ export default async function SearchPage(props: {
           image: p.image,
           category: p.category,
           isHot: isGroup ? (p.groupHot || false) : (p.isHot ?? false),
+          purchaseUrl: p.purchaseUrl ?? null,
           stockCount,
           soldCount: isGroup ? (p.totalSold || 0) : (p.sold || 0)
         }

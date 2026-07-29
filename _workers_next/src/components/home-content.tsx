@@ -18,6 +18,7 @@ import { CheckInButton } from "@/components/checkin-button"
 import { PointsPurchaseButton } from "@/components/points-purchase-button"
 import { useI18n } from "@/lib/i18n/context"
 import { INFINITE_STOCK } from "@/lib/constants"
+import { getSafePurchaseUrl } from "@/lib/purchase-url"
 
 interface Product {
     id: string
@@ -36,6 +37,11 @@ interface Product {
     variantCount?: number
     priceMin?: number
     priceMax?: number
+    purchaseUrl?: string | null
+}
+
+function hasExternalPurchaseUrl(product: Product) {
+    return Boolean(getSafePurchaseUrl(product.purchaseUrl))
 }
 
 interface HomeContentProps {
@@ -312,7 +318,7 @@ export function HomeContent({
                                 aria-label={t("common.viewDetails")}
                                 className={cn(
                                     "group tech-card relative flex h-full flex-col overflow-hidden rounded-[1.8rem] border border-border/35 bg-card/85 shadow-[0_20px_50px_-38px_rgba(15,23,42,0.28)] transition-all duration-300 animate-in fade-in slide-in-from-bottom-2 motion-reduce:animate-none",
-                                    product.stockCount <= 0 && "opacity-90"
+                                    !hasExternalPurchaseUrl(product) && product.stockCount <= 0 && "opacity-90"
                                 )}
                                 style={{ animationDelay: `${index * 60}ms` }}
                             >
@@ -342,16 +348,18 @@ export function HomeContent({
                                         ) : (
                                             <span />
                                         )}
-                                        <Badge
-                                            className={cn(
-                                                "h-7 rounded-full border px-3 text-[10px] font-medium shadow-sm",
-                                                product.stockCount > 0
-                                                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                                                    : "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-300"
-                                            )}
-                                        >
-                                            {product.stockCount > 0 ? t("common.inStock") : t("common.outOfStock")}
-                                        </Badge>
+                                        {!hasExternalPurchaseUrl(product) && (
+                                            <Badge
+                                                className={cn(
+                                                    "h-7 rounded-full border px-3 text-[10px] font-medium shadow-sm",
+                                                    product.stockCount > 0
+                                                        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                                                        : "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+                                                )}
+                                            >
+                                                {product.stockCount > 0 ? t("common.inStock") : t("common.outOfStock")}
+                                            </Badge>
+                                        )}
                                     </div>
                                     {product.isHot && (
                                         <Badge className="absolute bottom-3 left-3 h-7 rounded-full border-0 bg-orange-500 px-3 text-[10px] font-semibold text-white shadow-lg shadow-orange-500/20">
@@ -435,7 +443,9 @@ export function HomeContent({
                                                     )}
                                                 </div>
                                                 <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                                                    <span>{t("common.stock")}: {product.stockCount >= INFINITE_STOCK ? "∞" : product.stockCount}</span>
+                                                    {!hasExternalPurchaseUrl(product) && (
+                                                        <span>{t("common.stock")}: {product.stockCount >= INFINITE_STOCK ? "∞" : product.stockCount}</span>
+                                                    )}
                                                     <span>{t("common.sold")}: {product.soldCount}</span>
                                                 </div>
                                             </div>

@@ -124,7 +124,10 @@ export default function ProductForm({ product, categories = [] }: { product?: an
             router.push('/admin/products')
         } catch (e: any) {
             console.error('Save product error:', e)
-            toast.error(e?.message || t('common.error'))
+            const message = e?.message === 'invalid_purchase_url'
+                ? t('admin.productForm.purchaseUrlInvalid')
+                : (e?.message || t('common.error'))
+            toast.error(message)
         } finally {
             setLoading(false)
             submitLock.current = false
@@ -280,6 +283,21 @@ export default function ProductForm({ product, categories = [] }: { product?: an
                             placeholder={t('admin.productForm.compareAtPricePlaceholder')}
                             onWheel={(e) => e.currentTarget.blur()}
                         />
+                    </div>
+
+                    <div className="grid gap-2">
+                        <Label htmlFor="purchaseUrl">{t('admin.productForm.purchaseUrlLabel')}</Label>
+                        <Input
+                            id="purchaseUrl"
+                            name="purchaseUrl"
+                            type="url"
+                            inputMode="url"
+                            maxLength={2048}
+                            autoComplete="url"
+                            defaultValue={currentProduct?.purchaseUrl || ''}
+                            placeholder={t('admin.productForm.purchaseUrlPlaceholder')}
+                        />
+                        <p className="text-xs text-muted-foreground">{t('admin.productForm.purchaseUrlHint')}</p>
                     </div>
 
                     <div className="grid gap-2">

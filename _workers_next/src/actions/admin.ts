@@ -20,6 +20,7 @@ import {
     splitProductImageGallery,
     validateProductImageRef,
 } from "@/lib/product-images"
+import { validatePurchaseUrl } from "@/lib/purchase-url"
 
 export async function checkAdmin() {
     const session = await auth()
@@ -61,6 +62,7 @@ export async function saveProduct(formData: FormData) {
     const isHot = formData.get('isHot') === 'on'
     const isShared = formData.get('isShared') === 'on'
     const purchaseWarning = (formData.get('purchaseWarning') as string | null)?.trim() || null
+    const purchaseUrl = validatePurchaseUrl(formData.get('purchaseUrl'))
     const visibilityLevelRaw = (formData.get('visibilityLevel') as string | null)?.trim() ?? ''
     const variantGroupId = (formData.get('variantGroupId') as string | null)?.trim() || null
     const variantLabel = (formData.get('variantLabel') as string | null)?.trim() || null
@@ -121,6 +123,7 @@ export async function saveProduct(formData: FormData) {
             productImages: additionalImagesJson,
             purchaseLimit,
             purchaseWarning,
+            purchaseUrl,
             isHot,
             isShared,
             visibilityLevel,
@@ -139,6 +142,7 @@ export async function saveProduct(formData: FormData) {
                 productImages: additionalImagesJson,
                 purchaseLimit,
                 purchaseWarning,
+                purchaseUrl,
                 isHot,
                 isShared,
                 visibilityLevel,
@@ -159,6 +163,9 @@ export async function saveProduct(formData: FormData) {
         } catch { /* column exists */ }
         try {
             await db.run(sql.raw(`ALTER TABLE products ADD COLUMN purchase_warning TEXT`));
+        } catch { /* column exists */ }
+        try {
+            await db.run(sql.raw(`ALTER TABLE products ADD COLUMN purchase_url TEXT`));
         } catch { /* column exists */ }
         try {
             await db.run(sql.raw(`ALTER TABLE products ADD COLUMN is_shared INTEGER DEFAULT 0`));

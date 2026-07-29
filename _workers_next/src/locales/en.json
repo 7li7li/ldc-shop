@@ -39,6 +39,7 @@
         "sold": "Sold",
         "buy": "Buy",
         "buyNow": "Buy Now",
+        "goToPurchase": "Go to Purchase",
         "payNow": "Pay Now",
         "processing": "Processing...",
         "viewDetails": "View Details",
@@ -568,6 +569,7 @@
             "show": "Show",
             "actions": "Actions",
             "manageCards": "Cards",
+            "externalLink": "External link",
             "confirmDelete": "Are you sure you want to delete this product?"
         },
         "users": {
@@ -697,6 +699,10 @@
             "pricePlaceholder": "0.00",
             "compareAtPriceLabel": "Original Price (optional)",
             "compareAtPricePlaceholder": "e.g. 99.00",
+            "purchaseUrlLabel": "Purchase Redirect URL (optional)",
+            "purchaseUrlPlaceholder": "https://example.com/buy",
+            "purchaseUrlHint": "When set, purchases open this URL and do not use stock or card keys.",
+            "purchaseUrlInvalid": "Enter a valid http:// or https:// URL",
             "categoryLabel": "Category",
             "categoryPlaceholder": "general",
             "visibilityLabel": "Visibility",
