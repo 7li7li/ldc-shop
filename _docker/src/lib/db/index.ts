@@ -59,3 +59,22 @@ export const db: any = globalForSqlite.db ?? createDatabase();
 if (process.env.NODE_ENV !== "production") {
     globalForSqlite.db = db;
 }
+
+/**
+ * Execute a static SQLite schema script.
+ *
+ * Drizzle's `db.run()` prepares exactly one statement, while SQLite schema
+ * setup commonly contains a table plus one or more indexes.  Use the native
+ * driver's `exec()` only for static, parameter-free DDL scripts so first boot
+ * and on-demand schema compatibility checks work with better-sqlite3.
+ */
+export async function runSqliteScript(script: string): Promise<void> {
+    if (isBuildPhase()) return;
+
+    const sqlite = globalForSqlite.sqlite;
+    if (!sqlite) {
+        throw new Error("SQLite connection is not available");
+    }
+
+    sqlite.exec(script);
+}

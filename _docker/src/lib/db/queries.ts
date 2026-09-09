@@ -1,4 +1,4 @@
-import { db } from "./index";
+import { db, runSqliteScript } from "./index";
 import { products, cards, orders, settings, reviews, reviewReplies, loginUsers, categories, userNotifications, wishlistItems, wishlistVotes } from "./schema";
 import { INFINITE_STOCK, RESERVATION_TTL_MS } from "@/lib/constants";
 import { eq, sql, desc, and, asc, gte, or, inArray, lte, lt, isNull } from "drizzle-orm";
@@ -46,13 +46,46 @@ async function ensureCardKeyDuplicatesAllowed() {
     }
 }
 
+function getErrorText(error: unknown) {
+    const parts: string[] = [];
+    const seen = new Set<unknown>();
+    let current: unknown = error;
+
+    for (let depth = 0; current !== undefined && current !== null && depth < 4; depth += 1) {
+        if (typeof current === "object") {
+            if (seen.has(current)) break;
+            seen.add(current);
+
+            const value = current as { message?: unknown; cause?: unknown };
+            if (typeof value.message === "string") {
+                parts.push(value.message);
+            }
+            try {
+                parts.push(String(current));
+            } catch {
+                // Best effort: an unusual error object should not hide the
+                // original migration error.
+            }
+            current = value.cause;
+            continue;
+        }
+
+        parts.push(String(current));
+        break;
+    }
+
+    return parts.join(" ").toLowerCase();
+}
+
 async function safeAddColumn(table: string, column: string, definition: string) {
     try {
         await db.run(sql.raw(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`));
     } catch (e: any) {
-        // Ignore "duplicate column" errors in SQLite
-        // Use JSON.stringify AND String(e) to be safe across different environments
-        const errorString = (JSON.stringify(e) + String(e)).toLowerCase();
+        // Drizzle puts the SQLite message in `cause`; String(e) alone only
+        // contains "Failed to run the query".  Existing databases therefore
+        // need to treat the nested duplicate-column error as a successful
+        // no-op.
+        const errorString = getErrorText(e);
         if (!errorString.includes('duplicate column')) throw e;
     }
 }
@@ -104,7 +137,7 @@ async function ensureIndexes() {
         try {
             await db.run(sql.raw(statement));
         } catch (e: any) {
-            const errorString = (JSON.stringify(e) + String(e) + (e?.message || '')).toLowerCase();
+            const errorString = getErrorText(e);
             if (errorString.includes('no such table') || errorString.includes('does not exist')) {
                 continue;
             }
@@ -204,7 +237,7 @@ async function ensureDatabaseInitialized() {
 
     console.log("First run detected, initializing database...");
 
-    await db.run(sql`
+    await runSqliteScript(`
         -- Products table
         CREATE TABLE IF NOT EXISTS products (
             id TEXT PRIMARY KEY,
@@ -1296,7 +1329,7 @@ export async function setSetting(key: string, value: string): Promise<void> {
 
 // Categories (best-effort; table created on demand)
 async function ensureCategoriesTable() {
-    await db.run(sql`
+    await runSqliteScript(`
         CREATE TABLE IF NOT EXISTS categories(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
@@ -1854,7 +1887,7 @@ async function ensureUserMessagesTable() {
 }
 
 async function ensureBroadcastTables() {
-    await db.run(sql`
+    await runSqliteScript(`
         CREATE TABLE IF NOT EXISTS broadcast_messages(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
@@ -1875,7 +1908,7 @@ async function ensureBroadcastTables() {
 
 async function ensureWishlistTables() {
     if (wishlistTablesReady) return;
-    await db.run(sql`
+    await runSqliteScript(`
         CREATE TABLE IF NOT EXISTS wishlist_items(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,

@@ -1,7 +1,7 @@
 'use server'
 
 import { auth } from "@/lib/auth"
-import { db } from "@/lib/db"
+import { db, runSqliteScript } from "@/lib/db"
 import { products, cards, reviews, reviewReplies, categories } from "@/lib/db/schema"
 import { eq, sql, inArray, and, or, isNull, lte } from "drizzle-orm"
 import { sendBarkMessage, sendTelegramMessage } from "@/lib/notifications"
@@ -963,7 +963,7 @@ export async function testEmailNotification(to: string) {
 }
 
 async function ensureCategoriesTable() {
-    await db.run(sql`
+    await runSqliteScript(`
         CREATE TABLE IF NOT EXISTS categories (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,

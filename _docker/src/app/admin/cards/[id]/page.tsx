@@ -1,4 +1,4 @@
-import { db } from "@/lib/db"
+import { db, runSqliteScript } from "@/lib/db"
 import { cards } from "@/lib/db/schema"
 import { desc, sql } from "drizzle-orm"
 import { getProductForAdmin } from "@/lib/db/queries"
@@ -30,7 +30,7 @@ export default async function CardsPage({ params }: { params: Promise<{ id: stri
 
         if (!isTableOrColumnMissing) throw error
 
-        await db.run(sql`
+        await runSqliteScript(`
             CREATE TABLE IF NOT EXISTS cards (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
