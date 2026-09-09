@@ -11,6 +11,13 @@ interface BuyMetaReview {
     rating: number
     comment: string | null
     createdAt: string | null
+    replies: Array<{
+        id: number
+        username: string
+        userId: string | null
+        comment: string
+        createdAt: string | null
+    }>
 }
 
 interface BuyPageMeta {
@@ -55,13 +62,22 @@ export async function getBuyPageMeta(productId: string): Promise<BuyPageMeta> {
         getEmailSettings().catch(() => ({ apiKey: null, fromEmail: null, enabled: false, fromName: null })),
     ])
 
-    const reviews: BuyMetaReview[] = rawReviews.map((review) => ({
+    const reviews: BuyMetaReview[] = rawReviews.map((review: any) => ({
         id: Number(review.id),
         username: review.username || "",
         userId: review.userId || null,
         rating: Number(review.rating || 0),
         comment: review.comment || null,
         createdAt: toIsoString(review.createdAt),
+        replies: Array.isArray((review as any).replies)
+            ? (review as any).replies.map((reply: any) => ({
+                id: Number(reply.id),
+                username: reply.username || "",
+                userId: reply.userId || null,
+                comment: reply.comment || "",
+                createdAt: toIsoString(reply.createdAt),
+            }))
+            : [],
     }))
 
     let canReview = false

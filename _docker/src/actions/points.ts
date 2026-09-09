@@ -7,7 +7,46 @@ import { ensureLoginUsersSchema, getSetting } from "@/lib/db/queries"
 import { and, eq, isNull, lt, or, sql } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 
-export async function checkIn() {
+export type CheckinMode = 'random' | 'fixed'
+
+function parsePositiveInt(value: string | null | undefined, fallback: number) {
+    const parsed = Number.parseInt(String(value ?? '').trim(), 10)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+function normalizeCheckinMode(value: unknown): CheckinMode {
+    return value === 'fixed' ? 'fixed' : 'random'
+}
+
+async function getCheckinRewardRange() {
+    const legacyRewardStr = await getSetting('checkin_reward')
+    const legacyReward = parsePositiveInt(legacyRewardStr, 10)
+    const min = parsePositiveInt(await getSetting('checkin_reward_min'), legacyReward)
+    const maxRaw = parsePositiveInt(await getSetting('checkin_reward_max'), min)
+    const max = Math.max(min, maxRaw)
+
+    return { min, max }
+}
+
+async function getRandomCheckinReward() {
+    const { min, max } = await getCheckinRewardRange()
+
+    if (min === max) return min
+    return Math.floor(Math.random() * (max - min + 1)) + min
+}
+
+async function getFixedCheckinReward() {
+    const { min } = await getCheckinRewardRange()
+    return parsePositiveInt(await getSetting('checkin_reward_fixed'), min)
+}
+
+export async function getCheckinRewardConfig() {
+    const { min, max } = await getCheckinRewardRange()
+    const fixed = parsePositiveInt(await getSetting('checkin_reward_fixed'), min)
+    return { min, max, fixed }
+}
+
+export async function checkIn(mode?: CheckinMode | string) {
     const session = await auth()
     if (!session?.user?.id) {
         return { success: false, error: "Not logged in" }
@@ -20,6 +59,7 @@ export async function checkIn() {
     }
 
     const userId = session.user.id
+    const effectiveMode = normalizeCheckinMode(mode)
 
     try {
         await ensureLoginUsersSchema()
@@ -33,8 +73,9 @@ export async function checkIn() {
         const yesterdayStartUtcMs = todayStartUtcMs - 86400000
 
         // 2. Get Reward Amount
-        const rewardStr = await getSetting('checkin_reward')
-        const reward = parseInt(rewardStr || '10', 10)
+        const reward = effectiveMode === 'fixed'
+            ? await getFixedCheckinReward()
+            : await getRandomCheckinReward()
 
         // 3. Perform Check-in & Award Points (atomic guard in DB)
         const updated = await db.update(loginUsers)
@@ -63,7 +104,7 @@ export async function checkIn() {
         }
 
         revalidatePath('/')
-        return { success: true, points: reward, consecutiveDays: updated[0]?.consecutiveDays ?? 1 }
+        return { success: true, mode: effectiveMode, points: reward, consecutiveDays: updated[0]?.consecutiveDays ?? 1 }
     } catch (error: any) {
         console.error("Check-in error:", error)
         return { success: false, error: `Check-in failed: ${error?.message || 'Unknown error'}` }

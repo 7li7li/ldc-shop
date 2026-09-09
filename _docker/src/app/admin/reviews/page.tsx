@@ -1,6 +1,6 @@
 import { db } from "@/lib/db"
-import { products, reviews } from "@/lib/db/schema"
-import { desc, eq } from "drizzle-orm"
+import { products, reviews, reviewReplies } from "@/lib/db/schema"
+import { desc, eq, inArray } from "drizzle-orm"
 import { AdminReviewsContent } from "@/components/admin/reviews-content"
 import { Suspense } from "react"
 
@@ -22,6 +22,44 @@ async function ReviewsContent() {
     .orderBy(desc(reviews.createdAt))
     .limit(100)
 
+  const reviewIds = rows.map((r: any) => r.id).filter(Boolean)
+  const replyRows = reviewIds.length
+    ? await db
+      .select({
+        id: reviewReplies.id,
+        reviewId: reviewReplies.reviewId,
+        userId: reviewReplies.userId,
+        username: reviewReplies.username,
+        comment: reviewReplies.comment,
+        createdAt: reviewReplies.createdAt,
+      })
+      .from(reviewReplies)
+      .where(inArray(reviewReplies.reviewId, reviewIds))
+      .orderBy(desc(reviewReplies.createdAt))
+    : []
+
+  const replyMap = new Map<number, Array<{
+    id: number
+    reviewId: number
+    userId: string
+    username: string
+    comment: string
+    createdAt: Date | null
+  }>>()
+
+  for (const reply of replyRows as any[]) {
+    const list = replyMap.get(reply.reviewId) ?? []
+    list.push({
+      id: reply.id,
+      reviewId: reply.reviewId,
+      userId: reply.userId,
+      username: reply.username,
+      comment: reply.comment,
+      createdAt: reply.createdAt,
+    })
+    replyMap.set(reply.reviewId, list)
+  }
+
   return (
     <AdminReviewsContent
       reviews={rows.map((r: any) => ({
@@ -34,6 +72,7 @@ async function ReviewsContent() {
         rating: r.rating,
         comment: r.comment,
         createdAt: r.createdAt,
+        replies: replyMap.get(r.id) || [],
       }))}
     />
   )

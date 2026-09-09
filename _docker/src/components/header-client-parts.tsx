@@ -4,30 +4,24 @@ import Link from "next/link"
 import { useI18n } from "@/lib/i18n/context"
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { LanguageSwitcher } from "@/components/language-switcher"
-import { ShoppingBag } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { usePathname, useRouter } from "next/navigation"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { getMyUnreadCount } from "@/actions/user-notifications"
+import { Heart, Users } from "lucide-react"
 
-export function HeaderLogo({ adminName, shopNameOverride, shopLogoOverride }: { adminName?: string; shopNameOverride?: string | null; shopLogoOverride?: string | null }) {
+export function HeaderLogo({ adminName, shopNameOverride, shopLogoVersion }: { adminName?: string; shopNameOverride?: string | null; shopLogoVersion?: string | null }) {
     const { t } = useI18n()
     const override = shopNameOverride?.trim()
-    const logoUrl = shopLogoOverride?.trim()
     const shopName = adminName
         ? t('common.shopNamePattern', { name: adminName, appName: t('common.appName') })
         : t('common.appName')
+    const logoUrl = shopLogoVersion ? `/favicon?v=${shopLogoVersion}` : "/favicon"
 
     return (
         <Link href="/" className="flex items-center gap-2 min-w-0 group text-muted-foreground hover:text-primary transition-colors duration-200 hover:-translate-y-0.5">
-            {logoUrl ? (
-                <img src={logoUrl} alt="Logo" className="h-8 w-8 rounded-lg object-contain" />
-            ) : (
-                <div className="h-8 w-8 rounded-lg bg-foreground flex items-center justify-center transition-all duration-300 shadow-sm group-hover:shadow-md">
-                    <ShoppingBag className="h-4 w-4 text-background" />
-                </div>
-            )}
+            <img src={logoUrl} alt="Logo" className="h-8 w-8 rounded-lg object-cover shadow-sm transition-all duration-300 group-hover:shadow-md" />
             <span className="text-xs sm:text-sm font-semibold tracking-tight truncate max-w-[160px] sm:max-w-[220px] md:max-w-none">
                 {override || shopName}
             </span>
@@ -92,6 +86,66 @@ export function HeaderSearch({ className }: { className?: string }) {
                 placeholder={t('search.placeholder')}
             />
         </form>
+    )
+}
+
+export function HeaderQuickActions({
+    wishlistEnabled,
+    visitorCount,
+    customerServiceUrl,
+    customerServiceSvg,
+}: {
+    wishlistEnabled: boolean
+    visitorCount: number | null
+    customerServiceUrl: string | null
+    customerServiceSvg: string | null
+}) {
+    const { t } = useI18n()
+    const customerServiceHref = customerServiceUrl?.trim()
+    const customerServiceIconSrc = useMemo(() => {
+        const svg = customerServiceSvg?.trim()
+        if (!svg) return null
+        return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+    }, [customerServiceSvg])
+    const showCustomerService = Boolean(customerServiceHref && customerServiceIconSrc)
+
+    if (!showCustomerService && !wishlistEnabled && typeof visitorCount !== "number") return null
+
+    return (
+        <div className="flex items-center gap-1">
+            {showCustomerService && (
+                <a
+                    href={customerServiceHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={t('home.customerService')}
+                    title={t('home.customerService')}
+                    className="inline-flex h-8 items-center gap-1.5 justify-center rounded-full px-2.5 text-xs font-medium text-muted-foreground transition-colors duration-200 hover:bg-background/70 hover:text-primary"
+                >
+                    <img src={customerServiceIconSrc || ''} alt="" className="h-4 w-4 object-contain" />
+                    <span>{t('home.customerServiceShort')}</span>
+                </a>
+            )}
+            {wishlistEnabled && (
+                <Link
+                    href="/wishlist"
+                    aria-label={t('wishlist.title')}
+                    title={t('wishlist.title')}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium text-muted-foreground transition-colors duration-200 hover:bg-background/70 hover:text-primary"
+                >
+                    <Heart className="h-3.5 w-3.5" />
+                </Link>
+            )}
+            {typeof visitorCount === "number" && (
+                <div
+                    title={t('home.visitorCount', { count: visitorCount })}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium text-muted-foreground"
+                >
+                    <Users className="h-3.5 w-3.5 text-primary" />
+                    <span className="font-semibold tabular-nums text-foreground">{visitorCount}</span>
+                </div>
+            )}
+        </div>
     )
 }
 

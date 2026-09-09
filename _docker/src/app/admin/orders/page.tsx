@@ -2,9 +2,11 @@ import { db } from "@/lib/db"
 import { loginUsers, orders } from "@/lib/db/schema"
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm"
 import { AdminOrdersContent } from "@/components/admin/orders-content"
-import { normalizeTimestampMs, withOrderColumnFallback } from "@/lib/db/queries"
+import { normalizeTimestampMs, withOrderColumnFallback, getProductVariantLabels } from "@/lib/db/queries"
 import { PAYMENT_PRODUCT_ID } from "@/lib/payment"
 import { unstable_noStore } from "next/cache"
+
+const LOGIN_USER_LOOKUP_BATCH_SIZE = 50
 
 function parseIntParam(value: unknown, fallback: number) {
     const num = typeof value === 'string' ? Number.parseInt(value, 10) : NaN
@@ -14,6 +16,14 @@ function parseIntParam(value: unknown, fallback: number) {
 function firstParam(value: string | string[] | undefined): string | undefined {
     if (!value) return undefined
     return Array.isArray(value) ? value[0] : value
+}
+
+function chunkArray<T>(items: T[], size: number) {
+    const chunks: T[][] = []
+    for (let index = 0; index < items.length; index += size) {
+        chunks.push(items.slice(index, index + size))
+    }
+    return chunks
 }
 
 export default async function AdminOrdersPage(props: {
@@ -38,7 +48,8 @@ export default async function AdminOrdersPage(props: {
             sql`${orders.productName} LIKE ${like}`,
             sql`COALESCE(${orders.username}, '') LIKE ${like}`,
             sql`COALESCE(${orders.email}, '') LIKE ${like}`,
-            sql`COALESCE(${orders.tradeNo}, '') LIKE ${like}`
+            sql`COALESCE(${orders.tradeNo}, '') LIKE ${like}`,
+            sql`COALESCE(${orders.cardKey}, '') LIKE ${like}`
         ))
     }
     const whereExpr = whereParts.length ? and(...whereParts) : undefined
@@ -60,20 +71,24 @@ export default async function AdminOrdersPage(props: {
         ])
     })
 
-    const orderUserIds = Array.from(new Set(
+    const orderUserIds: string[] = Array.from(new Set(
         rows
             .map((o: any) => (typeof o.userId === "string" ? o.userId.trim() : ""))
             .filter((id: string) => id.length > 0)
     ))
 
     const loginUserRows = orderUserIds.length > 0
-        ? await db
-            .select({
-                userId: loginUsers.userId,
-                username: loginUsers.username,
-            })
-            .from(loginUsers)
-            .where(inArray(loginUsers.userId, orderUserIds))
+        ? (await Promise.all(
+            chunkArray(orderUserIds, LOGIN_USER_LOOKUP_BATCH_SIZE).map((batch) =>
+                db
+                    .select({
+                        userId: loginUsers.userId,
+                        username: loginUsers.username,
+                    })
+                    .from(loginUsers)
+                    .where(inArray(loginUsers.userId, batch))
+            )
+        )).flat()
         : []
 
     const usernameByUserId = new Map<string, string>()
@@ -84,10 +99,14 @@ export default async function AdminOrdersPage(props: {
 
     const total = countRes[0]?.count || 0
 
+    const productIds: string[] = Array.from(new Set(rows.map((o: any) => o.productId).filter((id: any): id is string => Boolean(id))))
+    const productVariantLabels = productIds.length > 0 ? await getProductVariantLabels(productIds) : {}
+
     return (
         <AdminOrdersContent
             orders={rows.map((o: any) => ({
                 orderId: o.orderId,
+                productId: o.productId,
                 userId: o.userId,
                 username: (o.userId && usernameByUserId.get(o.userId)) || o.username,
                 email: o.email,
@@ -98,6 +117,7 @@ export default async function AdminOrdersPage(props: {
                 tradeNo: o.tradeNo,
                 createdAt: o.createdAt
             }))}
+            productVariantLabels={productVariantLabels}
             total={total}
             page={page}
             pageSize={pageSize}

@@ -1,14 +1,14 @@
 {
   "name": "ldc-shop-docker",
-  "version": "1.2.9-Docker",
+  "version": "1.4.1-docker",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "db:push": "drizzle-kit push",
-    "db:migrate": "drizzle-kit push"
+    "db:push": "drizzle-kit push --force",
+    "db:migrate": "drizzle-kit push --force"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",
@@ -26,7 +26,7 @@
     "drizzle-orm": "^0.36.0",
     "framer-motion": "^12.29.0",
     "lucide-react": "^0.562.0",
-    "next": "16.1.6",
+    "next": "16.1.7",
     "next-auth": "^5.0.0-beta.30",
     "next-themes": "^0.4.6",
     "node-cron": "^3.0.3",
@@ -38,7 +38,6 @@
     "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3.3.3",
     "@tailwindcss/postcss": "^4",
     "@types/better-sqlite3": "^7.6.8",
     "@types/node": "^20.19.30",
@@ -47,7 +46,7 @@
     "@types/react-dom": "^19.0.3",
     "drizzle-kit": "^0.28.0",
     "eslint": "^9",
-    "eslint-config-next": "16.1.6",
+    "eslint-config-next": "16.1.7",
     "tailwindcss": "^4",
     "tw-animate-css": "^1.4.0",
     "typescript": "^5"

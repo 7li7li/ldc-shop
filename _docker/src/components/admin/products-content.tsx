@@ -10,6 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Plus, Eye, EyeOff, ArrowUp, ArrowDown } from "lucide-react"
 import { deleteProduct, toggleProductStatus, reorderProduct } from "@/actions/admin"
+import { INFINITE_STOCK } from "@/lib/constants"
+import { getSafePurchaseUrl } from "@/lib/purchase-url"
 import { toast } from "sonner"
 
 interface Product {
@@ -22,6 +24,9 @@ interface Product {
     isActive: boolean
     isHot: boolean
     sortOrder: number
+    variantGroupId?: string | null
+    variantLabel?: string | null
+    purchaseUrl?: string | null
 }
 
 interface AdminProductsContentProps {
@@ -150,7 +155,16 @@ export function AdminProductsContent({ products, lowStockThreshold }: AdminProdu
                                     </Button>
                                 </div>
                                 </TableCell>
-                                <TableCell className="font-medium">{product.name}</TableCell>
+                                <TableCell className="font-medium">
+                                    <div className="flex flex-col gap-1">
+                                        <span>{product.name}</span>
+                                        {(product.variantGroupId || product.variantLabel) && (
+                                            <span className="text-xs text-muted-foreground">
+                                                {[product.variantGroupId, product.variantLabel].filter(Boolean).join(" · ")}
+                                            </span>
+                                        )}
+                                    </div>
+                                </TableCell>
                                 <TableCell>
                                     <div className="flex items-center gap-2">
                                         <span>{Number(product.price)}</span>
@@ -170,12 +184,16 @@ export function AdminProductsContent({ products, lowStockThreshold }: AdminProdu
                                     )}
                                 </TableCell>
                                 <TableCell>
-                                    <div className="flex items-center gap-2">
-                                        <span>{product.stockCount}</span>
-                                        {product.stockCount <= threshold && (
-                                            <Badge variant="destructive" className="text-[10px]">{t('admin.products.lowStock')}</Badge>
-                                        )}
-                                    </div>
+                                    {getSafePurchaseUrl(product.purchaseUrl) ? (
+                                        <Badge variant="secondary">{t('admin.products.externalLink')}</Badge>
+                                    ) : (
+                                        <div className="flex items-center gap-2">
+                                            <span>{product.stockCount >= INFINITE_STOCK ? "∞" : product.stockCount}</span>
+                                            {product.stockCount <= threshold && (
+                                                <Badge variant="destructive" className="text-[10px]">{t('admin.products.lowStock')}</Badge>
+                                            )}
+                                        </div>
+                                    )}
                                 </TableCell>
                                 <TableCell>
                                     <Badge variant={product.isActive ? 'default' : 'secondary'}>
@@ -192,11 +210,13 @@ export function AdminProductsContent({ products, lowStockThreshold }: AdminProdu
                                     >
                                         {product.isActive ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                     </Button>
-                                    <Button asChild variant="outline" size="sm">
-                                        <Link href={`/admin/cards/${product.id}`}>
-                                            {t('admin.products.manageCards')}
-                                        </Link>
-                                    </Button>
+                                    {!getSafePurchaseUrl(product.purchaseUrl) && (
+                                        <Button asChild variant="outline" size="sm">
+                                            <Link href={`/admin/cards/${product.id}`}>
+                                                {t('admin.products.manageCards')}
+                                            </Link>
+                                        </Button>
+                                    )}
                                     <Button asChild variant="outline" size="sm">
                                         <Link href={`/admin/product/edit/${product.id}`} prefetch={false}>
                                             {t('common.edit')}

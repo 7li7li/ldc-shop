@@ -2,7 +2,7 @@
 
 基于 **Next.js 16**、**SQLite** 和 **Shadcn UI** 构建的虚拟商品商店 Docker 版本。
 
-本版本基于 `_workers_next`（Cloudflare Workers 版）改造，将数据库从 Cloudflare D1 替换为本地 SQLite（`better-sqlite3`），适用于 VPS / 自托管部署。
+本版本基于 `_workers_next`（Cloudflare Workers 版）改造，已同步当前商城、订单、积分、签到、商品规格和购买跳转等功能；仅将运行时数据库从 Cloudflare D1 替换为本地 SQLite（`better-sqlite3`），适用于 VPS / 自托管部署。
 
 ## 技术架构
 
@@ -13,11 +13,13 @@
 - **支付**: EPay
 - **UI**: Tailwind CSS + Shadcn UI + Framer Motion
 
+容器每次启动会先执行 Drizzle schema 同步，再启动应用；首次部署和后续新增字段/表会自动写入挂载的 SQLite 文件。升级前仍建议先备份 `data/` 目录。
+
 ---
 
-## 部署方式一：拉取预构建镜像（推荐）
+## 部署方式一：拉取匹配版本的预构建镜像
 
-无需克隆代码，直接使用已发布的 Docker 镜像。
+无需克隆代码，直接使用已发布的 Docker 镜像。仅在镜像标签明确包含本仓库当前版本时使用此方式。
 
 ### 一键脚本
 
@@ -38,9 +40,9 @@ docker compose pull && docker compose up -d
 
 ---
 
-## 部署方式二：自行构建镜像
+## 部署方式二：自行构建镜像（推荐）
 
-适合需要修改源码或自定义构建的场景。
+适合需要最新功能、SQLite 兼容升级或自定义构建的场景。
 
 ### 方法 A：一键脚本（交互式）
 
@@ -119,6 +121,7 @@ your-domain.com {
 | `PAY_URL` | 否 | 支付接口地址，默认 Linux DO Credit |
 | `ADMIN_USERS` | 是 | 管理员用户名，多个用逗号分隔 |
 | `DATABASE_PATH` | 否 | SQLite 路径，默认 `/app/data/ldc-shop.sqlite` |
+| `CRON_INTERNAL_URL` | 否 | 定时清理任务访问站点的容器内地址，默认 `http://127.0.0.1:3000` |
 | `GITHUB_ID` | 否 | GitHub OAuth Client ID |
 | `GITHUB_SECRET` | 否 | GitHub OAuth Client Secret |
 

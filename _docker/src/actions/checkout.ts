@@ -13,6 +13,8 @@ import { notifyAdminPaymentSuccess } from "@/lib/notifications"
 import { sendOrderEmail } from "@/lib/email"
 import { INFINITE_STOCK, RESERVATION_TTL_MS } from "@/lib/constants"
 import { pullOneCardFromApi } from "@/lib/card-api"
+import { resolveSiteBaseUrl } from "@/lib/site-url"
+import { getSafePurchaseUrl } from "@/lib/purchase-url"
 
 const MAX_ORDER_QUANTITY = 10000
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -39,7 +41,7 @@ async function autoReplenishByApi(productId: string, reason: string) {
     }
 }
 
-export async function createOrder(productId: string, quantity: number = 1, email?: string, usePoints: boolean = false) {
+export async function createOrder(productId: string, quantity: number = 1, email?: string, usePoints: boolean = false, answers?: string[]) {
     const session = await auth()
     const user = session?.user
     const normalizedQuantity = Number(quantity)
@@ -58,10 +60,35 @@ export async function createOrder(productId: string, quantity: number = 1, email
             name: true,
             price: true,
             purchaseLimit: true,
-            isShared: true
+            isShared: true,
+            purchaseUrl: true,
+            purchaseQuestions: true
         }
     })
     if (!product) return { success: false, error: 'buy.productNotFound' }
+
+    const externalPurchaseUrl = getSafePurchaseUrl(product.purchaseUrl)
+    if (externalPurchaseUrl) {
+        return { success: true, isExternal: true, url: externalPurchaseUrl }
+    }
+
+    if (product.purchaseQuestions) {
+        try {
+            const qs: Array<{ q: string; a: string }> = JSON.parse(product.purchaseQuestions)
+            if (Array.isArray(qs) && qs.length > 0) {
+                if (!answers || answers.length !== qs.length) {
+                    return { success: false, error: 'buy.answersRequired' }
+                }
+                const allCorrect = qs.every((q, i) => {
+                    const userAnswer = (answers[i] || '').trim().toLowerCase()
+                    return userAnswer === q.a.trim().toLowerCase()
+                })
+                if (!allCorrect) {
+                    return { success: false, error: 'buy.questionsWrong' }
+                }
+            }
+        } catch { /* malformed JSON, skip */ }
+    }
 
     const purchaseLimit = product.purchaseLimit && product.purchaseLimit > 0 ? product.purchaseLimit : null
     const maxQuantity = purchaseLimit ?? MAX_ORDER_QUANTITY
@@ -240,6 +267,7 @@ export async function createOrder(productId: string, quantity: number = 1, email
                         )
                         RETURNING id, card_key
                     `);
+
                     if (claimedRows.length > 0) {
                         const row = claimedRows[0];
                         const id = Number(row.id);
@@ -495,9 +523,10 @@ export async function createOrder(productId: string, quantity: number = 1, email
     }
 
     if (isZeroPrice) {
+        const baseUrl = await resolveSiteBaseUrl()
         return {
             success: true,
-            url: `${process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || ''}/order/${orderId}`,
+            url: `${baseUrl}/order/${orderId}`,
             isZeroPrice: true
         }
     }
@@ -505,7 +534,7 @@ export async function createOrder(productId: string, quantity: number = 1, email
     const cookieStore = await cookies()
     cookieStore.set('ldc_pending_order', orderId, { secure: true, path: '/', sameSite: 'lax' })
 
-    const baseUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const baseUrl = await resolveSiteBaseUrl();
     const payParams: Record<string, any> = {
         pid: process.env.MERCHANT_ID!,
         type: 'epay',
@@ -539,7 +568,7 @@ export async function getRetryPaymentParams(orderId: string) {
     if (!order) return { success: false, error: 'buy.productNotFound' }
     if (order.status !== 'pending') return { success: false, error: 'order.status.paid' }
 
-    const baseUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const baseUrl = await resolveSiteBaseUrl();
 
     const uniqueTradeNo = `${order.orderId}_retry${Date.now()}`;
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { useI18n } from "@/lib/i18n/context"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -31,6 +31,29 @@ export function AdminMessagesContent({ history, inbox }: { history: any[]; inbox
     const [inboxReading, setInboxReading] = useState<number | null>(null)
     const [clearingInbox, setClearingInbox] = useState(false)
     const [expandedInboxIds, setExpandedInboxIds] = useState<number[]>([])
+    const composeRef = useRef<HTMLDivElement>(null)
+    const bodyRef = useRef<HTMLTextAreaElement>(null)
+
+    const handleReply = (row: any) => {
+        setTargetType("username")
+        setTargetValue(row.username || "")
+        setTitle(row.title ? `Re: ${row.title.replace(/^Re:\s*/i, '')}` : "")
+        setBody("")
+        if (!row.isRead) {
+            markUserMessageRead(row.id).then(() => {
+                setInboxItems((prev: any[]) =>
+                    prev.map((item) => item.id === row.id ? { ...item, isRead: true } : item)
+                )
+                if (typeof window !== "undefined") {
+                    window.dispatchEvent(new CustomEvent("ldc:user-messages-updated"))
+                }
+            }).catch(() => {})
+        }
+        setTimeout(() => {
+            composeRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+            bodyRef.current?.focus()
+        }, 100)
+    }
 
     const targetPlaceholder = useMemo(() => {
         if (targetType === "username") return t('admin.messages.usernamePlaceholder')
@@ -55,7 +78,7 @@ export function AdminMessagesContent({ history, inbox }: { history: any[]; inbox
         <div className="space-y-6">
             <h1 className="text-3xl font-bold tracking-tight">{t('admin.messages.title')}</h1>
 
-            <Card>
+            <Card ref={composeRef}>
                 <CardHeader>
                     <CardTitle className="text-lg">{t('admin.messages.compose')}</CardTitle>
                 </CardHeader>
@@ -111,6 +134,7 @@ export function AdminMessagesContent({ history, inbox }: { history: any[]; inbox
                         </div>
                         <div className="floating-field">
                             <Textarea
+                                ref={bodyRef}
                                 value={body}
                                 onChange={(e) => setBody(e.target.value)}
                                 placeholder=" "
@@ -303,7 +327,16 @@ export function AdminMessagesContent({ history, inbox }: { history: any[]; inbox
                                                     {row.createdAt ? new Date(row.createdAt).toLocaleString() : '-'}
                                                 </TableCell>
                                                 <TableCell className="text-right">
-                                                    <div className="flex justify-end gap-2">
+                                                    <div className="flex justify-end gap-2 flex-wrap">
+                                                        {row.username && (
+                                                            <Button
+                                                                variant="default"
+                                                                size="sm"
+                                                                onClick={() => handleReply(row)}
+                                                            >
+                                                                {t('admin.messages.reply')}
+                                                            </Button>
+                                                        )}
                                                         <Button
                                                             variant="outline"
                                                             size="sm"

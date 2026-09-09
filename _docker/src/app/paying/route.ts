@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server"
-import { getRequestBaseUrl } from "@/lib/url"
 
 const DEFAULT_PAY_URL = "https://credit.linux.do/epay/pay/submit.php"
 
@@ -13,8 +12,8 @@ function escapeHtml(value: string) {
 }
 
 export async function GET(request: Request) {
-  const baseUrl = getRequestBaseUrl(request)
-  return NextResponse.redirect(new URL("/", baseUrl))
+  const url = new URL(request.url)
+  return NextResponse.redirect(new URL("/", url))
 }
 
 export async function POST(request: Request) {

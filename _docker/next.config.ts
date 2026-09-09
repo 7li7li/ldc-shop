@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  outputFileTracingRoot: path.resolve(__dirname),
+  // Keep the runtime behavior consistent with the current application source.
+  cacheComponents: false,
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '**' },

@@ -9,7 +9,7 @@ A serverless virtual goods shop built with **Next.js 16**, **Cloudflare Workers*
 > [!IMPORTANT]
 > **⚠️ Vercel edition is no longer maintained. Use the Cloudflare Workers or Docker edition.**
 > 
-> The Workers edition is the actively maintained version with all latest features. The Docker edition may lag behind.
+> The Workers and Docker editions share the current feature set. Docker replaces the runtime database with local SQLite for self-hosting.
 
 > 🚀 **Recommended: Cloudflare Workers or Docker self-hosted**
 > 

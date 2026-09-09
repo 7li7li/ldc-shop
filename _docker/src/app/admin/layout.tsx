@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import { AdminSidebar } from "@/components/admin/sidebar"
 import { UpdateNotification } from "@/components/admin/update-notification"
-import { getSetting, setSetting } from "@/lib/db/queries"
+import { getSetting } from "@/lib/db/queries"
 import { RegistryPrompt } from "@/components/admin/registry-prompt"
 import { isRegistryEnabled } from "@/lib/registry"
 import { APP_VERSION } from "@/lib/version"
@@ -16,18 +16,6 @@ async function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     const adminUsers = process.env.ADMIN_USERS?.toLowerCase().split(',') || []
     if (!user || !user.username || !adminUsers.includes(user.username.toLowerCase())) {
         redirect("/")
-    }
-
-    if (user?.avatar_url) {
-        try {
-            const currentLogo = await getSetting("shop_logo")
-            if (!currentLogo || !currentLogo.trim()) {
-                await setSetting("shop_logo", user.avatar_url)
-                await setSetting("shop_logo_updated_at", String(Date.now()))
-            }
-        } catch {
-            // best effort
-        }
     }
 
     const registryEnabled = isRegistryEnabled()

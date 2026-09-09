@@ -1,7 +1,7 @@
 "use server"
 
 import { auth } from "@/lib/auth"
-import { db, dbExecRaw } from "@/lib/db"
+import { db } from "@/lib/db"
 import { loginUsers } from "@/lib/db/schema"
 import { eq, sql } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
@@ -11,13 +11,13 @@ async function safeAddColumn(table: string, column: string, definition: string) 
     try {
         await db.run(sql.raw(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`))
     } catch (e: any) {
-        const msg = ((e?.message || '') + (e?.cause?.message || '') + String(e)).toLowerCase()
-        if (!msg.includes("duplicate column")) throw e
+        const errorString = (JSON.stringify(e) + String(e)).toLowerCase()
+        if (!errorString.includes("duplicate column")) throw e
     }
 }
 
 async function ensureWishlistTables() {
-    dbExecRaw(`
+    await db.run(sql`
         CREATE TABLE IF NOT EXISTS wishlist_items(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,

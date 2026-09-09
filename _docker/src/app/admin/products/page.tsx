@@ -37,7 +37,10 @@ export default async function AdminPage() {
                 stockCount,
                 isActive: p.isActive ?? true,
                 isHot: p.isHot ?? false,
-                sortOrder: p.sortOrder ?? 0
+                sortOrder: p.sortOrder ?? 0,
+                variantGroupId: p.variantGroupId ?? null,
+                variantLabel: p.variantLabel ?? null,
+                purchaseUrl: p.purchaseUrl ?? null
             }})}
             lowStockThreshold={lowStockThreshold}
         />

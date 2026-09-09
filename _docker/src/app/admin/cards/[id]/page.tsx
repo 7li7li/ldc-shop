@@ -1,4 +1,4 @@
-import { db, dbExecRaw } from "@/lib/db"
+import { db } from "@/lib/db"
 import { cards } from "@/lib/db/schema"
 import { desc, sql } from "drizzle-orm"
 import { getProductForAdmin } from "@/lib/db/queries"
@@ -20,20 +20,17 @@ export default async function CardsPage({ params }: { params: Promise<{ id: stri
             .where(sql`${cards.productId} = ${id} AND COALESCE(${cards.isUsed}, 0) = 0 AND (${cards.expiresAt} IS NULL OR ${cards.expiresAt} > ${Date.now()}) AND (${cards.reservedAt} IS NULL OR ${cards.reservedAt} < ${Date.now() - 60000})`)
             .orderBy(desc(cards.createdAt))
     } catch (error: any) {
-        const msg = (error?.message || '') + (error?.cause?.message || '')
         const errorString = JSON.stringify(error)
         const isTableOrColumnMissing =
-            msg.includes('does not exist') ||
-            msg.includes('no such table') ||
-            msg.includes('no such column') ||
-            errorString.includes('42P01') ||
-            errorString.includes('42703') ||
-            errorString.includes('no such table') ||
+            error?.message?.includes('does not exist') ||
+            error?.cause?.message?.includes('does not exist') ||
+            errorString.includes('42P01') || // undefined_table
+            errorString.includes('42703') || // undefined_column
             (errorString.includes('relation') && errorString.includes('does not exist'))
 
         if (!isTableOrColumnMissing) throw error
 
-        dbExecRaw(`
+        await db.run(sql`
             CREATE TABLE IF NOT EXISTS cards (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,

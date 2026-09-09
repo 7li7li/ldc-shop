@@ -5,11 +5,12 @@ import { useI18n } from "@/lib/i18n/context"
 import Link from "next/link"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { CreditCard, Package, Search, Star } from "lucide-react"
+import { CreditCard, Search, Star } from "lucide-react"
+import { ProductImagePlaceholder } from "@/components/product-image-placeholder"
 import { ClientDate } from "@/components/client-date"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { isPaymentOrder } from "@/lib/payment"
+import { isPaymentOrder, isPointsTopupOrder } from "@/lib/payment"
 
 interface Order {
     orderId: string
@@ -21,7 +22,7 @@ interface Order {
     canReview?: boolean
 }
 
-export function OrdersContent({ orders }: { orders: Order[] }) {
+export function OrdersContent({ orders, productVariantLabels = {}, productImages = {} }: { orders: Order[]; productVariantLabels?: Record<string, string | null>; productImages?: Record<string, string | null> }) {
     const { t } = useI18n()
     const [query, setQuery] = useState("")
     const [status, setStatus] = useState<string>("all")
@@ -50,7 +51,9 @@ export function OrdersContent({ orders }: { orders: Order[] }) {
     ]
 
     const getOrderName = (order: Order) => {
-        return isPaymentOrder(order.productId) ? t('payment.title') : order.productName
+        const base = isPaymentOrder(order.productId) ? t('payment.title') : isPointsTopupOrder(order.productId) ? t('pointsPurchase.title') : order.productName
+        const variant = order.productId ? productVariantLabels[order.productId] : null
+        return variant ? `${base} · ${variant}` : base
     }
 
     const filtered = useMemo(() => {
@@ -64,7 +67,7 @@ export function OrdersContent({ orders }: { orders: Order[] }) {
             const hay = [o.orderId, o.productName, displayName].join(' ').toLowerCase()
             return hay.includes(q)
         })
-    }, [orders, query, status, t])
+    }, [orders, query, status, productVariantLabels, t])
 
     return (
         <main className="container py-12">
@@ -104,11 +107,19 @@ export function OrdersContent({ orders }: { orders: Order[] }) {
                         <Card key={order.orderId} className="hover:border-primary/50 transition-colors">
                             <Link href={`/order/${order.orderId}`}>
                                 <div className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center">
-                                    <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center shrink-0">
-                                        {isPaymentOrder(order.productId) ? (
-                                            <CreditCard className="h-6 w-6 text-muted-foreground" />
+                                    <div className="h-12 w-12 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
+                                        {!isPaymentOrder(order.productId) && !isPointsTopupOrder(order.productId) && order.productId && productImages[order.productId] ? (
+                                            <img
+                                                src={productImages[order.productId]!}
+                                                alt=""
+                                                className="h-full w-full object-cover"
+                                            />
+                                        ) : isPaymentOrder(order.productId) || isPointsTopupOrder(order.productId) ? (
+                                            <div className="h-full w-full bg-muted flex items-center justify-center">
+                                                <CreditCard className="h-6 w-6 text-muted-foreground" />
+                                            </div>
                                         ) : (
-                                            <Package className="h-6 w-6 text-muted-foreground" />
+                                            <ProductImagePlaceholder productId={order.productId || order.orderId} productName={order.productName} size="xs" />
                                         )}
                                     </div>
                                     <div className="flex-1 min-w-0">
@@ -121,7 +132,7 @@ export function OrdersContent({ orders }: { orders: Order[] }) {
                                             <ClientDate value={order.createdAt} />
                                         </div>
                                         <div className="mt-2 flex flex-wrap items-center gap-2 sm:justify-end">
-                                            {order.canReview && !isPaymentOrder(order.productId) && (
+                                            {order.canReview && !isPaymentOrder(order.productId) && !isPointsTopupOrder(order.productId) && (
                                                 <Link
                                                     href={`/buy/${order.productId}#reviews`}
                                                     onClick={(e) => e.stopPropagation()}

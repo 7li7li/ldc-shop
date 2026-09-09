@@ -98,6 +98,16 @@ export async function deleteUserMessage(id: number) {
     return { success: true }
 }
 
+export async function clearMyMessages() {
+    const session = await auth()
+    const userId = session?.user?.id
+    if (!userId) return { success: false, error: "Unauthorized" }
+
+    await ensureUserMessagesTable()
+    await db.delete(userMessages).where(eq(userMessages.userId, userId))
+    return { success: true }
+}
+
 export async function clearUserMessages() {
     await checkAdmin()
     await ensureUserMessagesTable()

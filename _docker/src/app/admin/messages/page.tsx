@@ -5,13 +5,11 @@ import { AdminMessagesContent } from "@/components/admin/messages-content"
 import { unstable_noStore } from "next/cache"
 
 function isMissingTable(error: any) {
-  const msg = (error?.message || '') + (error?.cause?.message || '')
   const errorString = JSON.stringify(error)
   return (
-    msg.includes('does not exist') ||
-    msg.includes('no such table') ||
+    error?.message?.includes('does not exist') ||
+    error?.cause?.message?.includes('does not exist') ||
     errorString.includes('42P01') ||
-    errorString.includes('no such table') ||
     (errorString.includes('relation') && errorString.includes('does not exist'))
   )
 }

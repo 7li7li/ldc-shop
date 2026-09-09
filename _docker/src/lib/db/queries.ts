@@ -1,5 +1,5 @@
-import { db, dbExecRaw } from "./index";
-import { products, cards, orders, settings, reviews, loginUsers, categories, userNotifications, wishlistItems, wishlistVotes } from "./schema";
+import { db } from "./index";
+import { products, cards, orders, settings, reviews, reviewReplies, loginUsers, categories, userNotifications, wishlistItems, wishlistVotes } from "./schema";
 import { INFINITE_STOCK, RESERVATION_TTL_MS } from "@/lib/constants";
 import { eq, sql, desc, and, asc, gte, or, inArray, lte, lt, isNull } from "drizzle-orm";
 import { updateTag, revalidatePath } from "next/cache";
@@ -9,7 +9,7 @@ import { cache } from "react";
 let dbInitialized = false;
 let loginUsersSchemaReady = false;
 let wishlistTablesReady = false;
-const CURRENT_SCHEMA_VERSION = 18;
+const CURRENT_SCHEMA_VERSION = 21;
 type ColumnEnsureKey = 'products' | 'orders' | 'cards' | 'loginUsers';
 const columnEnsureState: Record<ColumnEnsureKey, { ready: boolean; pending: Promise<void> | null }> = {
     products: { ready: false, pending: null },
@@ -17,6 +17,7 @@ const columnEnsureState: Record<ColumnEnsureKey, { ready: boolean; pending: Prom
     cards: { ready: false, pending: null },
     loginUsers: { ready: false, pending: null },
 };
+const reviewRepliesEnsureState = { ready: false, pending: null as Promise<void> | null };
 
 async function ensureColumnsOnce(key: ColumnEnsureKey, task: () => Promise<void>) {
     const state = columnEnsureState[key];
@@ -49,8 +50,10 @@ async function safeAddColumn(table: string, column: string, definition: string) 
     try {
         await db.run(sql.raw(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`));
     } catch (e: any) {
-        const msg = ((e?.message || '') + (e?.cause?.message || '') + String(e)).toLowerCase();
-        if (!msg.includes('duplicate column')) throw e;
+        // Ignore "duplicate column" errors in SQLite
+        // Use JSON.stringify AND String(e) to be safe across different environments
+        const errorString = (JSON.stringify(e) + String(e)).toLowerCase();
+        if (!errorString.includes('duplicate column')) throw e;
     }
 }
 
@@ -68,6 +71,7 @@ async function ensureIndexes() {
         `CREATE INDEX IF NOT EXISTS orders_user_status_created_at_idx ON orders(user_id, status, created_at)`,
         `CREATE INDEX IF NOT EXISTS orders_product_status_idx ON orders(product_id, status)`,
         `CREATE INDEX IF NOT EXISTS reviews_product_created_at_idx ON reviews(product_id, created_at)`,
+        `CREATE INDEX IF NOT EXISTS review_replies_review_created_idx ON review_replies(review_id, created_at)`,
         `CREATE INDEX IF NOT EXISTS refund_requests_order_id_idx ON refund_requests(order_id)`,
         `CREATE INDEX IF NOT EXISTS user_notifications_user_created_idx ON user_notifications(user_id, created_at)`,
         `CREATE INDEX IF NOT EXISTS user_notifications_user_read_idx ON user_notifications(user_id, is_read, created_at)`,
@@ -86,10 +90,10 @@ async function ensureIndexes() {
     // ... rest of ensureIndexes ...
     try {
         await db.run(sql`
-            DELETE FROM broadcast_reads 
+            DELETE FROM broadcast_reads
             WHERE id NOT IN (
-                SELECT MIN(id) 
-                FROM broadcast_reads 
+                SELECT MIN(id)
+                FROM broadcast_reads
                 GROUP BY message_id, user_id
             )
         `);
@@ -112,6 +116,39 @@ async function ensureIndexes() {
     }
 }
 
+async function ensureReviewRepliesTable() {
+    if (reviewRepliesEnsureState.ready) return;
+    if (reviewRepliesEnsureState.pending) {
+        await reviewRepliesEnsureState.pending;
+        return;
+    }
+
+    const pending = (async () => {
+        try {
+            await db.run(sql`
+                CREATE TABLE IF NOT EXISTS review_replies (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    review_id INTEGER NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+                    user_id TEXT NOT NULL,
+                    username TEXT NOT NULL,
+                    comment TEXT NOT NULL,
+                    created_at INTEGER DEFAULT (unixepoch() * 1000)
+                )
+            `)
+            reviewRepliesEnsureState.ready = true;
+        } catch {
+            // best effort
+        }
+    })();
+
+    reviewRepliesEnsureState.pending = pending;
+    try {
+        await pending;
+    } finally {
+        reviewRepliesEnsureState.pending = null;
+    }
+}
+
 // Auto-initialize database on first query
 async function ensureDatabaseInitialized() {
     if (dbInitialized) return;
@@ -120,7 +157,11 @@ async function ensureDatabaseInitialized() {
         // OPTIMIZATION: Check schema version first to avoid heavy DDL checks
         try {
             const version = await getSetting('schema_version');
-            if (version === String(CURRENT_SCHEMA_VERSION)) {
+            const parsedVersion = Number.parseInt(String(version || '').trim(), 10);
+            if (
+                version === String(CURRENT_SCHEMA_VERSION) ||
+                (Number.isFinite(parsedVersion) && parsedVersion >= CURRENT_SCHEMA_VERSION)
+            ) {
                 dbInitialized = true;
                 return;
             }
@@ -129,7 +170,7 @@ async function ensureDatabaseInitialized() {
         }
 
         // Quick check if products table exists
-        await db.all(sql`SELECT 1 FROM products LIMIT 1`);
+        await db.run(sql`SELECT 1 FROM products LIMIT 1`);
 
         // IMPORTANT: Even if table exists, ensure columns exist!
         await ensureProductsColumns();
@@ -163,7 +204,8 @@ async function ensureDatabaseInitialized() {
 
     console.log("First run detected, initializing database...");
 
-    dbExecRaw(`
+    await db.run(sql`
+        -- Products table
         CREATE TABLE IF NOT EXISTS products (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
@@ -172,18 +214,24 @@ async function ensureDatabaseInitialized() {
             compare_at_price TEXT,
             category TEXT,
             image TEXT,
+            product_images TEXT,
             is_hot INTEGER DEFAULT 0,
             is_active INTEGER DEFAULT 1,
             is_shared INTEGER DEFAULT 0,
             sort_order INTEGER DEFAULT 0,
             purchase_limit INTEGER,
             purchase_warning TEXT,
+            purchase_url TEXT,
             visibility_level INTEGER DEFAULT -1,
             stock_count INTEGER DEFAULT 0,
             locked_count INTEGER DEFAULT 0,
             sold_count INTEGER DEFAULT 0,
-            created_at INTEGER DEFAULT (unixepoch() * 1000)
+            created_at INTEGER DEFAULT (unixepoch() * 1000),
+            variant_group_id TEXT,
+            variant_label TEXT
         );
+
+        -- Cards (stock) table
         CREATE TABLE IF NOT EXISTS cards (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
@@ -195,6 +243,8 @@ async function ensureDatabaseInitialized() {
             used_at INTEGER,
             created_at INTEGER DEFAULT (unixepoch() * 1000)
         );
+
+        -- Orders table
         CREATE TABLE IF NOT EXISTS orders (
             order_id TEXT PRIMARY KEY,
             product_id TEXT NOT NULL,
@@ -215,6 +265,8 @@ async function ensureDatabaseInitialized() {
             current_payment_id TEXT,
             created_at INTEGER DEFAULT (unixepoch() * 1000)
         );
+
+        -- Login users table
         CREATE TABLE IF NOT EXISTS login_users (
             user_id TEXT PRIMARY KEY,
             username TEXT,
@@ -224,16 +276,22 @@ async function ensureDatabaseInitialized() {
             created_at INTEGER DEFAULT (unixepoch() * 1000),
             last_login_at INTEGER DEFAULT (unixepoch() * 1000)
         );
+
+        -- Daily checkins table
         CREATE TABLE IF NOT EXISTS daily_checkins_v2 (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT NOT NULL REFERENCES login_users(user_id) ON DELETE CASCADE,
             created_at INTEGER DEFAULT (unixepoch() * 1000)
         );
+
+        -- Settings table
         CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
             value TEXT,
             updated_at INTEGER DEFAULT (unixepoch() * 1000)
         );
+
+        -- Categories table
         CREATE TABLE IF NOT EXISTS categories (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -243,6 +301,8 @@ async function ensureDatabaseInitialized() {
             updated_at INTEGER DEFAULT (unixepoch() * 1000)
         );
         CREATE UNIQUE INDEX IF NOT EXISTS categories_name_uq ON categories(name);
+
+        -- Reviews table
         CREATE TABLE IF NOT EXISTS reviews (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
@@ -253,6 +313,17 @@ async function ensureDatabaseInitialized() {
             comment TEXT,
             created_at INTEGER DEFAULT (unixepoch() * 1000)
         );
+
+        CREATE TABLE IF NOT EXISTS review_replies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            review_id INTEGER NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+            user_id TEXT NOT NULL,
+            username TEXT NOT NULL,
+            comment TEXT NOT NULL,
+            created_at INTEGER DEFAULT (unixepoch() * 1000)
+        );
+
+        -- Refund requests table
         CREATE TABLE IF NOT EXISTS refund_requests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             order_id TEXT NOT NULL,
@@ -266,6 +337,8 @@ async function ensureDatabaseInitialized() {
             updated_at INTEGER DEFAULT (unixepoch() * 1000),
             processed_at INTEGER
         );
+
+        -- User notifications table
         CREATE TABLE IF NOT EXISTS user_notifications (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT NOT NULL REFERENCES login_users(user_id) ON DELETE CASCADE,
@@ -276,6 +349,8 @@ async function ensureDatabaseInitialized() {
             is_read INTEGER DEFAULT 0,
             created_at INTEGER DEFAULT (unixepoch() * 1000)
         );
+
+        -- Admin messages table
         CREATE TABLE IF NOT EXISTS admin_messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             target_type TEXT NOT NULL,
@@ -285,6 +360,8 @@ async function ensureDatabaseInitialized() {
             sender TEXT,
             created_at INTEGER DEFAULT (unixepoch() * 1000)
         );
+
+        -- User messages table
         CREATE TABLE IF NOT EXISTS user_messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT NOT NULL REFERENCES login_users(user_id) ON DELETE CASCADE,
@@ -294,6 +371,8 @@ async function ensureDatabaseInitialized() {
             is_read INTEGER DEFAULT 0,
             created_at INTEGER DEFAULT (unixepoch() * 1000)
         );
+
+        -- Broadcast messages
         CREATE TABLE IF NOT EXISTS broadcast_messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
@@ -301,12 +380,16 @@ async function ensureDatabaseInitialized() {
             sender TEXT,
             created_at INTEGER DEFAULT (unixepoch() * 1000)
         );
+
+        -- Broadcast read receipts
         CREATE TABLE IF NOT EXISTS broadcast_reads (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             message_id INTEGER NOT NULL REFERENCES broadcast_messages(id) ON DELETE CASCADE,
             user_id TEXT NOT NULL REFERENCES login_users(user_id) ON DELETE CASCADE,
             created_at INTEGER DEFAULT (unixepoch() * 1000)
         );
+
+        -- Wishlist items
         CREATE TABLE IF NOT EXISTS wishlist_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
@@ -315,12 +398,15 @@ async function ensureDatabaseInitialized() {
             username TEXT,
             created_at INTEGER DEFAULT (unixepoch() * 1000)
         );
+
+        -- Wishlist votes
         CREATE TABLE IF NOT EXISTS wishlist_votes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             item_id INTEGER NOT NULL REFERENCES wishlist_items(id) ON DELETE CASCADE,
             user_id TEXT NOT NULL REFERENCES login_users(user_id) ON DELETE CASCADE,
             created_at INTEGER DEFAULT (unixepoch() * 1000)
         );
+
         CREATE UNIQUE INDEX IF NOT EXISTS wishlist_votes_item_user_uq ON wishlist_votes(item_id, user_id);
     `);
 
@@ -348,6 +434,7 @@ async function ensureProductsColumns() {
         await safeAddColumn('products', 'compare_at_price', 'TEXT');
         await safeAddColumn('products', 'is_hot', 'INTEGER DEFAULT 0');
         await safeAddColumn('products', 'purchase_warning', 'TEXT');
+        await safeAddColumn('products', 'purchase_url', 'TEXT');
         await safeAddColumn('products', 'is_shared', 'INTEGER DEFAULT 0');
         await safeAddColumn('products', 'visibility_level', 'INTEGER DEFAULT -1');
         await safeAddColumn('products', 'stock_count', 'INTEGER DEFAULT 0');
@@ -355,6 +442,10 @@ async function ensureProductsColumns() {
         await safeAddColumn('products', 'sold_count', 'INTEGER DEFAULT 0');
         await safeAddColumn('products', 'rating', 'REAL DEFAULT 0');
         await safeAddColumn('products', 'review_count', 'INTEGER DEFAULT 0');
+        await safeAddColumn('products', 'variant_group_id', 'TEXT');
+        await safeAddColumn('products', 'variant_label', 'TEXT');
+        await safeAddColumn('products', 'purchase_questions', 'TEXT');
+        await safeAddColumn('products', 'product_images', 'TEXT');
     });
 }
 
@@ -720,7 +811,7 @@ async function backfillProductAggregates() {
     try {
         await ensureProductsColumns();
         const rows = await db.select({ id: products.id }).from(products);
-        await recalcProductAggregatesForMany(rows.map((row) => row.id));
+        await recalcProductAggregatesForMany(rows.map((row: { id: string }) => row.id));
         await markProductAggregatesBackfilled();
     } catch (error: any) {
         if (!isMissingTableOrColumn(error)) throw error;
@@ -766,6 +857,7 @@ export async function getProducts() {
             price: products.price,
             compareAtPrice: products.compareAtPrice,
             image: products.image,
+            productImages: products.productImages,
             category: products.category,
             isHot: products.isHot,
             isActive: products.isActive,
@@ -773,6 +865,9 @@ export async function getProducts() {
             visibilityLevel: products.visibilityLevel,
             sortOrder: products.sortOrder,
             purchaseLimit: products.purchaseLimit,
+            purchaseUrl: products.purchaseUrl,
+            variantGroupId: products.variantGroupId,
+            variantLabel: products.variantLabel,
             stock: sql<number>`COALESCE(${products.stockCount}, 0)`,
             locked: sql<number>`COALESCE(${products.lockedCount}, 0)`,
             sold: sql<number>`COALESCE(${products.soldCount}, 0)`
@@ -793,12 +888,12 @@ function visibilityCondition(isLoggedIn?: boolean, trustLevel?: number | null) {
     return lte(sql<number>`COALESCE(${products.visibilityLevel}, -1)`, threshold);
 }
 
-// Get only active products (for home page)
+// Get only active products (for home page); groups by variant_group_id and returns one representative per group with variantCount and priceRange
 export async function getActiveProducts(options?: { isLoggedIn?: boolean; trustLevel?: number | null }) {
     // Auto-initialize database on first access
     await ensureDatabaseInitialized();
 
-    return await withProductColumnFallback(async () => {
+    const rows = await withProductColumnFallback(async () => {
         return await db.select({
             id: products.id,
             name: products.name,
@@ -806,11 +901,17 @@ export async function getActiveProducts(options?: { isLoggedIn?: boolean; trustL
             price: products.price,
             compareAtPrice: products.compareAtPrice,
             image: products.image,
+            productImages: products.productImages,
             category: products.category,
             isHot: products.isHot,
             isShared: products.isShared,
             purchaseLimit: products.purchaseLimit,
+            purchaseUrl: products.purchaseUrl,
             visibilityLevel: products.visibilityLevel,
+            sortOrder: products.sortOrder,
+            createdAt: products.createdAt,
+            variantGroupId: products.variantGroupId,
+            variantLabel: products.variantLabel,
             stock: sql<number>`COALESCE(${products.stockCount}, 0)`,
             locked: sql<number>`COALESCE(${products.lockedCount}, 0)`,
             sold: sql<number>`COALESCE(${products.soldCount}, 0)`,
@@ -820,7 +921,72 @@ export async function getActiveProducts(options?: { isLoggedIn?: boolean; trustL
             .from(products)
             .where(and(eq(products.isActive, true), visibilityCondition(options?.isLoggedIn, options?.trustLevel)))
             .orderBy(asc(products.sortOrder), desc(products.createdAt));
-    })
+    });
+
+    return groupProductsAsVariants(rows);
+}
+
+function groupProductsAsVariants<T extends {
+    id: string;
+    price: string;
+    variantGroupId: string | null;
+    sortOrder: number | null;
+    createdAt: Date | null;
+    sold?: number;
+    stock?: number;
+    locked?: number;
+    rating?: number;
+    reviewCount?: number;
+    isHot?: boolean | null;
+    isShared?: boolean | null;
+}>(rows: T[]): (T & { variantCount?: number; priceMin?: number; priceMax?: number; totalSold?: number; totalStock?: number; totalLocked?: number; totalReviewCount?: number; avgRating?: number; groupHot?: boolean; groupShared?: boolean; allVariantIds?: string[] })[] {
+    const byGroup = new Map<string, T[]>();
+    for (const row of rows) {
+        const rawKey = (row.variantGroupId && row.variantGroupId.trim()) || null;
+        const key = rawKey ?? row.id;
+        const list = byGroup.get(key) ?? [];
+        list.push(row);
+        byGroup.set(key, list);
+    }
+    const result: (T & { variantCount?: number; priceMin?: number; priceMax?: number; totalSold?: number; totalStock?: number; totalLocked?: number; totalReviewCount?: number; avgRating?: number; groupHot?: boolean; groupShared?: boolean; allVariantIds?: string[] })[] = [];
+    for (const list of byGroup.values()) {
+        const rep = list.slice().sort((a, b) => {
+            const soA = a.sortOrder ?? 0;
+            const soB = b.sortOrder ?? 0;
+            if (soA !== soB) return soA - soB;
+            const ca = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const cb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return ca - cb;
+        })[0];
+        const prices = list.map((p) => parseFloat(p.price)).filter((n) => Number.isFinite(n));
+        const variantCount = list.length;
+        const priceMin = prices.length ? Math.min(...prices) : undefined;
+        const priceMax = prices.length ? Math.max(...prices) : undefined;
+
+        if (variantCount > 1) {
+            const totalSold = list.reduce((s, p) => s + (p.sold || 0), 0);
+            const totalStock = list.reduce((s, p) => s + (p.stock || 0), 0);
+            const totalLocked = list.reduce((s, p) => s + (p.locked || 0), 0);
+            const totalReviewCount = list.reduce((s, p) => s + (p.reviewCount || 0), 0);
+            const ratingSum = list.reduce((s, p) => s + (p.rating || 0) * (p.reviewCount || 0), 0);
+            const avgRating = totalReviewCount > 0 ? ratingSum / totalReviewCount : 0;
+            const groupHot = list.some((p) => !!p.isHot);
+            const groupShared = list.some((p) => !!p.isShared);
+            const allVariantIds = list.map((p) => p.id);
+            result.push({ ...rep, variantCount, priceMin, priceMax, totalSold, totalStock, totalLocked, totalReviewCount, avgRating, groupHot, groupShared, allVariantIds });
+        } else {
+            result.push({ ...rep });
+        }
+    }
+    result.sort((a, b) => {
+        const soA = a.sortOrder ?? 0;
+        const soB = b.sortOrder ?? 0;
+        if (soA !== soB) return soA - soB;
+        const ca = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const cb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return ca - cb;
+    });
+    return result;
 }
 
 export async function getWishlistItems(userId: string | null, limit = 10) {
@@ -900,17 +1066,23 @@ export async function getProduct(id: string, options?: { isLoggedIn?: boolean; t
             price: products.price,
             compareAtPrice: products.compareAtPrice,
             image: products.image,
+            productImages: products.productImages,
             category: products.category,
             isHot: products.isHot,
             isActive: products.isActive,
             isShared: products.isShared,
+            sold: sql<number>`COALESCE(${products.soldCount}, 0)`,
             purchaseLimit: products.purchaseLimit,
             purchaseWarning: products.purchaseWarning,
+            purchaseUrl: products.purchaseUrl,
             visibilityLevel: products.visibilityLevel,
             stock: sql<number>`COALESCE(${products.stockCount}, 0)`,
             locked: sql<number>`COALESCE(${products.lockedCount}, 0)`,
             rating: sql<number>`COALESCE(${products.rating}, 0)`,
-            reviewCount: sql<number>`COALESCE(${products.reviewCount}, 0)`
+            reviewCount: sql<number>`COALESCE(${products.reviewCount}, 0)`,
+            variantGroupId: products.variantGroupId,
+            variantLabel: products.variantLabel,
+            purchaseQuestions: products.purchaseQuestions
         })
             .from(products)
             .where(and(eq(products.id, id), visibilityCondition(options?.isLoggedIn, options?.trustLevel)))
@@ -939,7 +1111,74 @@ export async function getProductVisibility(id: string) {
     });
 }
 
-// Get product for admin (includes inactive products)
+export type ProductVariantRow = {
+    id: string;
+    name: string;
+    description: string | null;
+    price: string;
+    compareAtPrice: string | null;
+    image: string | null;
+    productImages: string | null;
+    variantLabel: string | null;
+    stock: number;
+    locked: number;
+    isShared: boolean | null;
+    sold: number;
+    purchaseLimit: number | null;
+    isHot: boolean | null;
+    purchaseWarning: string | null;
+    purchaseUrl: string | null;
+    purchaseQuestions: string | null;
+};
+
+export async function getProductVariants(
+    groupId: string,
+    options?: { isLoggedIn?: boolean; trustLevel?: number | null }
+): Promise<ProductVariantRow[]> {
+    return await withProductColumnFallback(async () => {
+        return await db.select({
+            id: products.id,
+            name: products.name,
+            description: products.description,
+            price: products.price,
+            compareAtPrice: products.compareAtPrice,
+            image: products.image,
+            productImages: products.productImages,
+            variantLabel: products.variantLabel,
+            stock: sql<number>`COALESCE(${products.stockCount}, 0)`,
+            locked: sql<number>`COALESCE(${products.lockedCount}, 0)`,
+            sold: sql<number>`COALESCE(${products.soldCount}, 0)`,
+            isShared: products.isShared,
+            purchaseLimit: products.purchaseLimit,
+            isHot: products.isHot,
+            purchaseWarning: products.purchaseWarning,
+            purchaseUrl: products.purchaseUrl,
+            purchaseQuestions: products.purchaseQuestions,
+        })
+            .from(products)
+            .where(and(
+                eq(products.variantGroupId, groupId),
+                eq(products.isActive, true),
+                visibilityCondition(options?.isLoggedIn, options?.trustLevel)
+            ))
+            .orderBy(asc(products.sortOrder), desc(products.createdAt));
+    });
+}
+
+export async function getProductVariantLabels(productIds: string[]): Promise<Record<string, string | null>> {
+    const ids = Array.from(new Set((productIds || []).map((id) => String(id).trim()).filter(Boolean)));
+    if (!ids.length) return {};
+    const rows = await db.select({ id: products.id, variantLabel: products.variantLabel })
+        .from(products)
+        .where(inArray(products.id, ids));
+    const out: Record<string, string | null> = {};
+    for (const row of rows) {
+        const label = row.variantLabel?.trim() || null;
+        if (label) out[row.id] = label;
+    }
+    return out;
+}
+
 export async function getProductForAdmin(id: string) {
     return await withProductColumnFallback(async () => {
         const result = await db.select({
@@ -949,13 +1188,18 @@ export async function getProductForAdmin(id: string) {
             price: products.price,
             compareAtPrice: products.compareAtPrice,
             image: products.image,
+            productImages: products.productImages,
             category: products.category,
             isHot: products.isHot,
             isActive: products.isActive,
             isShared: products.isShared,
             purchaseLimit: products.purchaseLimit,
             purchaseWarning: products.purchaseWarning,
+            purchaseUrl: products.purchaseUrl,
             visibilityLevel: products.visibilityLevel,
+            variantGroupId: products.variantGroupId,
+            variantLabel: products.variantLabel,
+            purchaseQuestions: products.purchaseQuestions,
         })
             .from(products)
             .where(eq(products.id, id));
@@ -1028,7 +1272,7 @@ export const getSetting = cache(async (key: string): Promise<string | null> => {
 export const getAllSettings = cache(async (): Promise<Record<string, string>> => {
     try {
         const rows = await db.select({ key: settings.key, value: settings.value }).from(settings);
-        return rows.reduce((acc, row) => {
+        return rows.reduce((acc: Record<string, string>, row: { key: string; value: string | null }) => {
             acc[row.key] = row.value || '';
             return acc;
         }, {} as Record<string, string>);
@@ -1052,15 +1296,15 @@ export async function setSetting(key: string, value: string): Promise<void> {
 
 // Categories (best-effort; table created on demand)
 async function ensureCategoriesTable() {
-    dbExecRaw(`
+    await db.run(sql`
         CREATE TABLE IF NOT EXISTS categories(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            icon TEXT,
-            sort_order INTEGER DEFAULT 0,
-            created_at INTEGER DEFAULT (unixepoch() * 1000),
-            updated_at INTEGER DEFAULT (unixepoch() * 1000)
-        );
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        icon TEXT,
+        sort_order INTEGER DEFAULT 0,
+        created_at INTEGER DEFAULT (unixepoch() * 1000),
+        updated_at INTEGER DEFAULT (unixepoch() * 1000)
+    );
         CREATE UNIQUE INDEX IF NOT EXISTS categories_name_uq ON categories(name);
     `)
 }
@@ -1258,7 +1502,7 @@ export async function searchActiveProducts(params: {
             break
     }
 
-    const [items, totalRes] = await withProductColumnFallback(async () => {
+    const [rows] = await withProductColumnFallback(async () => {
         const rowsPromise = db.select({
             id: products.id,
             name: products.name,
@@ -1270,6 +1514,11 @@ export async function searchActiveProducts(params: {
             isHot: products.isHot,
             isShared: products.isShared,
             purchaseLimit: products.purchaseLimit,
+            purchaseUrl: products.purchaseUrl,
+            sortOrder: products.sortOrder,
+            createdAt: products.createdAt,
+            variantGroupId: products.variantGroupId,
+            variantLabel: products.variantLabel,
             stock: sql<number>`COALESCE(${products.stockCount}, 0)`,
             locked: sql<number>`COALESCE(${products.lockedCount}, 0)`,
             sold: sql<number>`COALESCE(${products.soldCount}, 0)`,
@@ -1279,16 +1528,17 @@ export async function searchActiveProducts(params: {
             .from(products)
             .where(whereExpr)
             .orderBy(...orderByParts)
-            .limit(pageSize)
-            .offset(offset)
 
-        const countQuery = db.select({ count: sql<number>`count(*)` }).from(products).where(whereExpr)
-        return Promise.all([rowsPromise, countQuery])
+        return [await rowsPromise] as const
     })
+
+    const grouped = groupProductsAsVariants(rows)
+    const total = grouped.length
+    const items = grouped.slice(offset, offset + pageSize)
 
     return {
         items,
-        total: totalRes[0]?.count || 0,
+        total,
         page,
         pageSize,
     }
@@ -1308,7 +1558,7 @@ export async function getActiveProductCategories(options?: { isLoggedIn?: boolea
             ))
             .groupBy(products.category)
             .orderBy(asc(products.category));
-        return rows.map((r) => r.category as string).filter(Boolean);
+        return rows.map((r: { category: string | null }) => r.category as string).filter(Boolean);
     } catch (error: any) {
         if (isMissingTable(error)) return [];
         throw error;
@@ -1317,10 +1567,35 @@ export async function getActiveProductCategories(options?: { isLoggedIn?: boolea
 
 // Reviews
 export async function getProductReviews(productId: string) {
-    return await db.select()
+    await ensureReviewRepliesTable()
+    const reviewRows = await db.select()
         .from(reviews)
         .where(eq(reviews.productId, productId))
         .orderBy(desc(reviews.createdAt));
+
+    if (!reviewRows.length) return reviewRows.map((review: any) => ({ ...review, replies: [] }));
+
+    try {
+        const replyRows = await db.select()
+            .from(reviewReplies)
+            .where(inArray(reviewReplies.reviewId, reviewRows.map((review: any) => review.id)))
+            .orderBy(asc(reviewReplies.createdAt));
+
+        const replyMap = new Map<number, typeof replyRows>()
+        for (const reply of replyRows) {
+            const list = replyMap.get(reply.reviewId) ?? []
+            list.push(reply)
+            replyMap.set(reply.reviewId, list)
+        }
+
+        return reviewRows.map((review: any) => ({
+            ...review,
+            replies: replyMap.get(review.id) ?? [],
+        }));
+    } catch (error: any) {
+        if (!isMissingTableOrColumn(error)) throw error;
+        return reviewRows.map((review: any) => ({ ...review, replies: [] }));
+    }
 }
 
 export async function getProductRating(productId: string): Promise<{ average: number; count: number }> {
@@ -1383,6 +1658,19 @@ export async function createReview(data: {
     return res;
 }
 
+export async function createReviewReply(data: {
+    reviewId: number;
+    userId: string;
+    username: string;
+    comment: string;
+}) {
+    await ensureReviewRepliesTable()
+    return await db.insert(reviewReplies).values({
+        ...data,
+        createdAt: new Date(),
+    }).returning();
+}
+
 export async function canUserReview(userId: string, productId: string, username?: string): Promise<{ canReview: boolean; orderId?: string }> {
     try {
         const findUnreviewedOrder = async (whereClause: any) => {
@@ -1442,12 +1730,11 @@ export async function hasUserReviewedOrder(orderId: string): Promise<boolean> {
 }
 
 function isMissingTable(error: any) {
-    const msg = (error?.message || '') + (error?.cause?.message || '');
-    const errorString = JSON.stringify(error);
+    const errorString = (JSON.stringify(error) + String(error) + (error?.message || '')).toLowerCase();
     return (
-        msg.includes('does not exist') ||
-        msg.includes('no such table') ||
-        errorString.includes('42P01') ||
+        error?.message?.includes('does not exist') ||
+        error?.cause?.message?.includes('does not exist') ||
+        errorString.includes('42p01') ||
         errorString.includes('no such table') ||
         (errorString.includes('relation') && errorString.includes('does not exist'))
     );
@@ -1473,6 +1760,7 @@ async function migrateTimestampColumnsToMs() {
         { table: 'daily_checkins_v2', columns: ['created_at'] },
         { table: 'settings', columns: ['updated_at'] },
         { table: 'reviews', columns: ['created_at'] },
+        { table: 'review_replies', columns: ['created_at'] },
         { table: 'categories', columns: ['created_at', 'updated_at'] },
         { table: 'refund_requests', columns: ['created_at', 'updated_at', 'processed_at'] },
         { table: 'user_notifications', columns: ['created_at'] },
@@ -1566,7 +1854,7 @@ async function ensureUserMessagesTable() {
 }
 
 async function ensureBroadcastTables() {
-    dbExecRaw(`
+    await db.run(sql`
         CREATE TABLE IF NOT EXISTS broadcast_messages(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
@@ -1587,7 +1875,7 @@ async function ensureBroadcastTables() {
 
 async function ensureWishlistTables() {
     if (wishlistTablesReady) return;
-    dbExecRaw(`
+    await db.run(sql`
         CREATE TABLE IF NOT EXISTS wishlist_items(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
@@ -1670,6 +1958,20 @@ function normalizeGitHubUsernameValue(username?: string | null): string | null {
     const normalized = username.trim().toLowerCase()
     if (!normalized) return null
     return normalized
+}
+
+function isInvalidGitHubPlaceholderUser(userId?: string | null, username?: string | null) {
+    const normalizedUserId = (userId || '').trim().toLowerCase()
+    const normalizedUsername = (username || '').trim().toLowerCase()
+
+    return (
+        normalizedUserId === 'github:undefined' ||
+        normalizedUserId === 'github:null' ||
+        normalizedUserId === 'github:nan' ||
+        normalizedUsername === 'gh_undefined' ||
+        normalizedUsername === 'gh_null' ||
+        normalizedUsername === 'gh_nan'
+    )
 }
 
 function mergeLoginUserRows(primary: GitHubLoginUserRow, secondary: GitHubLoginUserRow) {
@@ -2006,6 +2308,10 @@ async function backfillLoginUsersFromOrdersAndReviews() {
 
 export async function recordLoginUser(userId: string, username?: string | null, email?: string | null) {
     if (!userId) return;
+    if (isInvalidGitHubPlaceholderUser(userId, username)) {
+        console.warn("recordLoginUser skipped invalid GitHub placeholder user", { userId, username })
+        return;
+    }
 
     try {
         const result = await db.insert(loginUsers).values({
@@ -2160,7 +2466,7 @@ export async function cleanupExpiredCardsIfNeeded(throttleMs: number = 10 * 60 *
         const rows = await db.select({ productId: cards.productId })
             .from(cards)
             .where(sql`${cards.expiresAt} IS NOT NULL AND ${cards.expiresAt} < ${now}`);
-        affectedProductIds = Array.from(new Set(rows.map((r) => r.productId).filter(Boolean)));
+        affectedProductIds = Array.from(new Set(rows.map((r: { productId: string }) => r.productId).filter(Boolean)));
     } catch (error: any) {
         if (!isMissingTableOrColumn(error)) throw error;
     }
@@ -2225,7 +2531,7 @@ export async function cancelExpiredOrders(filters: { productId?: string; userId?
         const fiveMinutesAgoMs = Date.now() - RESERVATION_TTL_MS;
         // Preselect expired orders because D1 may not return rows for UPDATE ... RETURNING
         const candidates = await db
-            .select({ orderId: orders.orderId, productId: orders.productId })
+            .select({ orderId: orders.orderId, productId: orders.productId, userId: orders.userId, pointsUsed: orders.pointsUsed })
             .from(orders)
             .where(and(
                 eq(orders.status, 'pending'),
@@ -2235,7 +2541,7 @@ export async function cancelExpiredOrders(filters: { productId?: string; userId?
                 orderId ? eq(orders.orderId, orderId) : sql`1=1`
             ));
 
-        const orderIds = candidates.map((row) => row.orderId).filter(Boolean);
+        const orderIds: string[] = candidates.map((row: any) => row.orderId).filter((id: any): id is string => Boolean(id));
         if (!orderIds.length) return orderIds;
 
         for (const expired of candidates) {
@@ -2251,10 +2557,16 @@ export async function cancelExpiredOrders(filters: { productId?: string; userId?
             }
             await db.update(orders)
                 .set({ status: 'cancelled' })
-                .where(eq(orders.orderId, expiredOrderId));
+                .where(and(eq(orders.orderId, expiredOrderId), eq(orders.status, 'pending')));
+
+            if (expired.userId && expired.pointsUsed && expired.pointsUsed > 0) {
+                await db.update(loginUsers)
+                    .set({ points: sql`${loginUsers.points} + ${expired.pointsUsed}` })
+                    .where(eq(loginUsers.userId, expired.userId));
+            }
         }
 
-        const productIds = Array.from(new Set(candidates.map((row) => row.productId).filter(Boolean)));
+        const productIds: string[] = Array.from(new Set(candidates.map((row: any) => row.productId).filter((id: any): id is string => Boolean(id))));
         for (const pid of productIds) {
             try {
                 await recalcProductAggregates(pid);
@@ -2297,8 +2609,8 @@ export async function getUsers(page = 1, pageSize = 20, q = '') {
         await ensureLoginUsersTable();
 
         let whereClause = undefined
-        if (q) {
-            const like = `%${q}%`
+        if (search) {
+            const like = `%${search}%`
             whereClause = or(
                 sql`${loginUsers.username} LIKE ${like}`,
                 sql`${loginUsers.userId} LIKE ${like}`

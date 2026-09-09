@@ -1,23 +1,10 @@
-import { headers } from "next/headers"
 import { auth } from "@/lib/auth"
 import { AdminPaymentCodeContent } from "@/components/admin/payment-code-content"
 import { md5 } from "@/lib/crypto"
-
-async function resolveBaseUrl() {
-    if (process.env.APP_URL) return process.env.APP_URL
-    if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL
-
-    const headerList = await headers()
-    const forwardedProto = headerList.get('x-forwarded-proto')
-    const forwardedHost = headerList.get('x-forwarded-host')
-    const host = forwardedHost || headerList.get('host')
-    const proto = forwardedProto || 'http'
-    if (host) return `${proto}://${host}`
-    return 'http://localhost:3000'
-}
+import { resolveSiteBaseUrl } from "@/lib/site-url"
 
 export default async function AdminCollectPage() {
-    const baseUrl = await resolveBaseUrl()
+    const baseUrl = await resolveSiteBaseUrl()
     const session = await auth()
     const adminUsers = (process.env.ADMIN_USERS || '')
         .split(',')

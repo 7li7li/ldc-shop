@@ -1,18 +1,22 @@
 'use client'
 
-import { useState } from "react"
+import { type ChangeEvent, useRef, useState } from "react"
 import { useI18n } from "@/lib/i18n/context"
+import { prepareUploadedImage } from "@/lib/client-image"
+import { DEFAULT_THEME_FONT, getThemeFontStack, THEME_FONT_VALUES, type ThemeFont } from "@/lib/theme-fonts"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { TrendingUp, ShoppingCart, CreditCard, Package, Users } from "lucide-react"
-import { saveShopName, saveShopDescription, saveShopLogo, saveShopFooter, saveThemeColor, saveLowStockThreshold, saveCheckinReward, saveCheckinEnabled, saveWishlistEnabled, saveNoIndex, saveRefundReclaimCards, saveRegistryHideNav } from "@/actions/admin"
+import { saveShopName, saveShopDescription, saveHomeIntro, saveCustomerService, saveShopLogo, saveShopFooter, saveThemeColor, saveThemeFont, saveLowStockThreshold, saveCheckinReward, saveCheckinFixedReward, saveCheckinEnabled, saveWishlistEnabled, saveNoIndex, saveRefundReclaimCards, saveRegistryHideNav, saveCurrencyUnit, savePointsPurchaseSettings } from "@/actions/admin"
 import { joinRegistry, leaveRegistry } from "@/actions/registry"
 import { checkForUpdatesClient, type ClientUpdateCheckResult } from "@/lib/update-check-client"
 import { toast } from "sonner"
+import { normalizeCurrencyUnit } from "@/lib/currency-unit"
 
 interface Stats {
     today: { count: number; revenue: number }
@@ -25,13 +29,23 @@ interface AdminSettingsContentProps {
     stats: Stats
     shopName: string | null
     shopDescription: string | null
+    homeTitle: string | null
+    homeSubtitle: string | null
+    customerServiceUrl: string | null
+    customerServiceSvg: string | null
     shopLogo: string | null
     shopFooter: string | null
+    currencyUnit: string | null
     themeColor: string | null
+    themeFont: string | null
     visitorCount: number
     lowStockThreshold: number
-    checkinReward: number
+    checkinRewardMin: number
+    checkinRewardMax: number
+    checkinFixedReward: number
     checkinEnabled: boolean
+    pointsPurchaseEnabled: boolean
+    pointsPurchaseRate: number
     wishlistEnabled: boolean
     noIndexEnabled: boolean
     refundReclaimCards: boolean
@@ -59,26 +73,46 @@ const THEME_COLORS = [
     { value: 'pink', hue: 330 },
 ]
 
-export function AdminSettingsContent({ stats, shopName, shopDescription, shopLogo, shopFooter, themeColor, visitorCount, lowStockThreshold, checkinReward, checkinEnabled, wishlistEnabled, noIndexEnabled, refundReclaimCards, registryHideNav, registryOptIn, registryEnabled, currentVersion }: AdminSettingsContentProps) {
+const SHOP_LOGO_UPLOAD_MAX_BYTES = 500 * 1024
+
+export function AdminSettingsContent({ stats, shopName, shopDescription, homeTitle, homeSubtitle, customerServiceUrl, customerServiceSvg, shopLogo, shopFooter, currencyUnit, themeColor, themeFont, visitorCount, lowStockThreshold, checkinRewardMin, checkinRewardMax, checkinFixedReward, checkinEnabled, pointsPurchaseEnabled, pointsPurchaseRate, wishlistEnabled, noIndexEnabled, refundReclaimCards, registryHideNav, registryOptIn, registryEnabled, currentVersion }: AdminSettingsContentProps) {
     const { t } = useI18n()
+    const router = useRouter()
+    const shopLogoFileInputRef = useRef<HTMLInputElement | null>(null)
 
     // State
     const [shopNameValue, setShopNameValue] = useState(shopName || '')
     const [savingShopName, setSavingShopName] = useState(false)
     const [shopDescValue, setShopDescValue] = useState(shopDescription || '')
     const [savingShopDesc, setSavingShopDesc] = useState(false)
+    const [homeTitleValue, setHomeTitleValue] = useState(homeTitle || '')
+    const [homeSubtitleValue, setHomeSubtitleValue] = useState(homeSubtitle || '')
+    const [savingHomeIntro, setSavingHomeIntro] = useState(false)
+    const [customerServiceUrlValue, setCustomerServiceUrlValue] = useState(customerServiceUrl || '')
+    const [customerServiceSvgValue, setCustomerServiceSvgValue] = useState(customerServiceSvg || '')
+    const [savingCustomerService, setSavingCustomerService] = useState(false)
     const [shopLogoValue, setShopLogoValue] = useState(shopLogo || '')
     const [savingShopLogo, setSavingShopLogo] = useState(false)
     const [shopFooterValue, setShopFooterValue] = useState(shopFooter || '')
     const [savingShopFooter, setSavingShopFooter] = useState(false)
+    const [currencyUnitValue, setCurrencyUnitValue] = useState(currencyUnit || '')
+    const [savingCurrencyUnit, setSavingCurrencyUnit] = useState(false)
     const [selectedTheme, setSelectedTheme] = useState(themeColor || 'purple')
     const [savingTheme, setSavingTheme] = useState(false)
+    const [selectedThemeFont, setSelectedThemeFont] = useState<ThemeFont>((themeFont as ThemeFont) || DEFAULT_THEME_FONT)
+    const [savingThemeFont, setSavingThemeFont] = useState(false)
     const [thresholdValue, setThresholdValue] = useState(String(lowStockThreshold || 5))
     const [savingThreshold, setSavingThreshold] = useState(false)
-    const [rewardValue, setRewardValue] = useState(String(checkinReward || 10))
+    const [rewardMinValue, setRewardMinValue] = useState(String(checkinRewardMin || 10))
+    const [rewardMaxValue, setRewardMaxValue] = useState(String(checkinRewardMax || checkinRewardMin || 10))
+    const [rewardFixedValue, setRewardFixedValue] = useState(String(checkinFixedReward || checkinRewardMin || 10))
     const [savingReward, setSavingReward] = useState(false)
+    const [savingFixedReward, setSavingFixedReward] = useState(false)
     const [enabledCheckin, setEnabledCheckin] = useState(checkinEnabled)
     const [savingEnabled, setSavingEnabled] = useState(false)
+    const [pointsPurchaseEnabledValue, setPointsPurchaseEnabledValue] = useState(pointsPurchaseEnabled)
+    const [pointsPurchaseRateValue, setPointsPurchaseRateValue] = useState(String(pointsPurchaseRate || 1))
+    const [savingPointsPurchase, setSavingPointsPurchase] = useState(false)
     const [enabledWishlist, setEnabledWishlist] = useState(wishlistEnabled)
     const [savingWishlist, setSavingWishlist] = useState(false)
     const [enabledNoIndex, setEnabledNoIndex] = useState(noIndexEnabled)
@@ -92,6 +126,9 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, shopLog
     const [registryJoined, setRegistryJoined] = useState(registryOptIn)
     const [hideRegistryNav, setHideRegistryNav] = useState(registryHideNav)
     const [savingRegistryNav, setSavingRegistryNav] = useState(false)
+    const [processingShopLogoFile, setProcessingShopLogoFile] = useState(false)
+    const usingUploadedShopLogo = shopLogoValue.startsWith('data:')
+    const shopLogoInputValue = usingUploadedShopLogo ? '' : shopLogoValue
 
     const handleSaveShopName = async () => {
         const trimmed = shopNameValue.trim()
@@ -122,6 +159,36 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, shopLog
         }
     }
 
+    const handleSaveHomeIntro = async () => {
+        setSavingHomeIntro(true)
+        try {
+            await saveHomeIntro(homeTitleValue, homeSubtitleValue)
+            setHomeTitleValue(homeTitleValue.trim())
+            setHomeSubtitleValue(homeSubtitleValue.trim())
+            router.refresh()
+            toast.success(t('common.success'))
+        } catch (e: any) {
+            toast.error(e.message)
+        } finally {
+            setSavingHomeIntro(false)
+        }
+    }
+
+    const handleSaveCustomerService = async () => {
+        setSavingCustomerService(true)
+        try {
+            await saveCustomerService(customerServiceUrlValue, customerServiceSvgValue)
+            setCustomerServiceUrlValue(customerServiceUrlValue.trim())
+            setCustomerServiceSvgValue(customerServiceSvgValue.trim())
+            router.refresh()
+            toast.success(t('common.success'))
+        } catch (e: any) {
+            toast.error(e.message)
+        } finally {
+            setSavingCustomerService(false)
+        }
+    }
+
     const handleSaveShopLogo = async () => {
         setSavingShopLogo(true)
         try {
@@ -131,6 +198,53 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, shopLog
             toast.error(e.message)
         } finally {
             setSavingShopLogo(false)
+        }
+    }
+
+    const handleSaveCurrencyUnit = async () => {
+        setSavingCurrencyUnit(true)
+        try {
+            await saveCurrencyUnit(currencyUnitValue)
+            setCurrencyUnitValue(normalizeCurrencyUnit(currencyUnitValue) || '')
+            router.refresh()
+            toast.success(t('common.success'))
+        } catch (e: any) {
+            toast.error(e.message)
+        } finally {
+            setSavingCurrencyUnit(false)
+        }
+    }
+
+    const handleSelectShopLogoFile = async (event: ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0]
+        event.target.value = ''
+        if (!file) return
+
+        setProcessingShopLogoFile(true)
+        try {
+            const prepared = await prepareUploadedImage(file, {
+                maxBytes: SHOP_LOGO_UPLOAD_MAX_BYTES,
+                maxDimension: 512,
+            })
+            setShopLogoValue(prepared.dataUrl)
+            toast.success(
+                prepared.wasCompressed
+                    ? t('admin.settings.shopLogoFileCompressed')
+                    : t('admin.settings.shopLogoFileReady')
+            )
+        } catch (error) {
+            const message = error instanceof Error ? error.message : ''
+            if (message === 'image_compression_unsupported') {
+                toast.error(t('admin.settings.shopLogoFileCompressionUnsupported'))
+                return
+            }
+            if (message === 'image_compression_failed') {
+                toast.error(t('admin.settings.shopLogoFileCompressionFailed'))
+                return
+            }
+            toast.error(t('admin.settings.shopLogoFileInvalid'))
+        } finally {
+            setProcessingShopLogoFile(false)
         }
     }
 
@@ -149,12 +263,24 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, shopLog
     const handleSaveReward = async () => {
         setSavingReward(true)
         try {
-            await saveCheckinReward(rewardValue)
+            await saveCheckinReward(rewardMinValue, rewardMaxValue)
             toast.success(t('common.success'))
         } catch (e: any) {
             toast.error(e.message)
         } finally {
             setSavingReward(false)
+        }
+    }
+
+    const handleSaveFixedReward = async () => {
+        setSavingFixedReward(true)
+        try {
+            await saveCheckinFixedReward(rewardFixedValue)
+            toast.success(t('common.success'))
+        } catch (e: any) {
+            toast.error(e.message)
+        } finally {
+            setSavingFixedReward(false)
         }
     }
 
@@ -168,6 +294,19 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, shopLog
             toast.error(e.message)
         } finally {
             setSavingEnabled(false)
+        }
+    }
+
+    const handleSavePointsPurchase = async () => {
+        setSavingPointsPurchase(true)
+        try {
+            await savePointsPurchaseSettings(pointsPurchaseEnabledValue, pointsPurchaseRateValue)
+            toast.success(t('common.success'))
+            router.refresh()
+        } catch (e: any) {
+            toast.error(e.message)
+        } finally {
+            setSavingPointsPurchase(false)
         }
     }
 
@@ -247,6 +386,20 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, shopLog
             toast.error(e.message)
         } finally {
             setSavingTheme(false)
+        }
+    }
+
+    const handleSaveThemeFont = async (font: ThemeFont) => {
+        setSavingThemeFont(true)
+        setSelectedThemeFont(font)
+        try {
+            await saveThemeFont(font)
+            toast.success(t('common.success'))
+            window.location.reload()
+        } catch (e: any) {
+            toast.error(e.message)
+        } finally {
+            setSavingThemeFont(false)
         }
     }
 
@@ -370,16 +523,14 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, shopLog
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="grid gap-2 md:max-w-xl">
-                        <div className="flex gap-2">
-                            <div className="floating-field flex-1 min-w-0">
-                                <Input
-                                    id="shop-name"
-                                    value={shopNameValue}
-                                    onChange={(e) => setShopNameValue(e.target.value)}
-                                    placeholder=" "
-                                />
-                                <Label htmlFor="shop-name" className="floating-label">{t('admin.settings.shopName')}</Label>
-                            </div>
+                        <Label htmlFor="shop-name">{t('admin.settings.shopName')}</Label>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                            <Input
+                                id="shop-name"
+                                value={shopNameValue}
+                                onChange={(e) => setShopNameValue(e.target.value)}
+                                className="flex-1"
+                            />
                             <Button onClick={handleSaveShopName} disabled={savingShopName}>
                                 {savingShopName ? t('common.processing') : t('common.save')}
                             </Button>
@@ -387,37 +538,112 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, shopLog
                         <p className="text-xs text-muted-foreground">{t('admin.settings.shopNameHint')}</p>
                     </div>
                     <div className="grid gap-2 md:max-w-xl">
-                        <div className="flex gap-2">
-                            <div className="floating-field flex-1 min-w-0">
-                                <Input
-                                    id="shop-desc"
-                                    value={shopDescValue}
-                                    onChange={(e) => setShopDescValue(e.target.value)}
-                                    placeholder=" "
-                                />
-                                <Label htmlFor="shop-desc" className="floating-label">{t('admin.settings.shopDescription')}</Label>
-                            </div>
+                        <Label htmlFor="shop-desc">{t('admin.settings.shopDescription')}</Label>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                            <Input
+                                id="shop-desc"
+                                value={shopDescValue}
+                                onChange={(e) => setShopDescValue(e.target.value)}
+                                className="flex-1"
+                            />
                             <Button variant="outline" onClick={handleSaveShopDesc} disabled={savingShopDesc}>
                                 {savingShopDesc ? t('common.processing') : t('common.save')}
                             </Button>
                         </div>
                     </div>
+                    <div className="grid gap-3 md:max-w-xl">
+                        <div className="grid gap-2">
+                            <Label htmlFor="home-title">{t('admin.settings.homeTitle')}</Label>
+                            <Input
+                                id="home-title"
+                                value={homeTitleValue}
+                                onChange={(e) => setHomeTitleValue(e.target.value)}
+                                placeholder={t('admin.settings.homeTitlePlaceholder')}
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="home-subtitle">{t('admin.settings.homeSubtitle')}</Label>
+                            <Textarea
+                                id="home-subtitle"
+                                value={homeSubtitleValue}
+                                onChange={(e) => setHomeSubtitleValue(e.target.value)}
+                                placeholder={t('admin.settings.homeSubtitlePlaceholder')}
+                                rows={2}
+                            />
+                        </div>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-xs text-muted-foreground">{t('admin.settings.homeIntroHint')}</p>
+                            <Button variant="outline" onClick={handleSaveHomeIntro} disabled={savingHomeIntro}>
+                                {savingHomeIntro ? t('common.processing') : t('common.save')}
+                            </Button>
+                        </div>
+                    </div>
+                    <div className="grid gap-3 md:max-w-xl">
+                        <div className="grid gap-2">
+                            <Label htmlFor="customer-service-url">{t('admin.settings.customerServiceUrl')}</Label>
+                            <Input
+                                id="customer-service-url"
+                                value={customerServiceUrlValue}
+                                onChange={(e) => setCustomerServiceUrlValue(e.target.value)}
+                                placeholder={t('admin.settings.customerServiceUrlPlaceholder')}
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="customer-service-svg">{t('admin.settings.customerServiceSvg')}</Label>
+                            <Textarea
+                                id="customer-service-svg"
+                                value={customerServiceSvgValue}
+                                onChange={(e) => setCustomerServiceSvgValue(e.target.value)}
+                                placeholder={t('admin.settings.customerServiceSvgPlaceholder')}
+                                rows={4}
+                            />
+                        </div>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-xs text-muted-foreground">{t('admin.settings.customerServiceHint')}</p>
+                            <Button variant="outline" onClick={handleSaveCustomerService} disabled={savingCustomerService}>
+                                {savingCustomerService ? t('common.processing') : t('common.save')}
+                            </Button>
+                        </div>
+                    </div>
                     <div className="grid gap-2 md:max-w-xl">
-                        <div className="flex gap-2">
-                            <div className="floating-field flex-1 min-w-0">
-                                <Input
-                                    id="shop-logo"
-                                    value={shopLogoValue}
-                                    onChange={(e) => setShopLogoValue(e.target.value)}
-                                    placeholder=" "
-                                />
-                                <Label htmlFor="shop-logo" className="floating-label">{t('admin.settings.shopLogo')}</Label>
-                            </div>
+                        <Label htmlFor="shop-logo">{t('admin.settings.shopLogo')}</Label>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                            <Input
+                                id="shop-logo"
+                                value={shopLogoInputValue}
+                                onChange={(e) => setShopLogoValue(e.target.value)}
+                                className="flex-1"
+                            />
                             <Button variant="outline" onClick={handleSaveShopLogo} disabled={savingShopLogo}>
                                 {savingShopLogo ? t('common.processing') : t('common.save')}
                             </Button>
                         </div>
                         <p className="text-xs text-muted-foreground">{t('admin.settings.shopLogoHint')}</p>
+                        {usingUploadedShopLogo && (
+                            <p className="text-xs text-muted-foreground">{t('admin.settings.shopLogoUploadedHint')}</p>
+                        )}
+                        <div className="flex flex-col gap-2 rounded-lg border border-dashed border-border/60 bg-muted/20 p-3">
+                            <Label htmlFor="shop-logo-file" className="text-sm font-medium">{t('admin.settings.shopLogoUpload')}</Label>
+                            <input
+                                ref={shopLogoFileInputRef}
+                                id="shop-logo-file"
+                                type="file"
+                                className="hidden"
+                                accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,image/x-icon,image/bmp,.png,.jpg,.jpeg,.webp,.gif,.svg,.ico,.bmp"
+                                onChange={handleSelectShopLogoFile}
+                                disabled={processingShopLogoFile}
+                            />
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="w-fit"
+                                onClick={() => shopLogoFileInputRef.current?.click()}
+                                disabled={processingShopLogoFile}
+                            >
+                                {processingShopLogoFile ? t('common.processing') : t('admin.settings.shopLogoUpload')}
+                            </Button>
+                            <p className="text-xs text-muted-foreground">{t('admin.settings.shopLogoUploadHint')}</p>
+                        </div>
                         {shopLogoValue && (
                             <div className="flex items-center gap-4 p-2 border rounded-md bg-muted/50">
                                 <img src={shopLogoValue} alt="Logo preview" className="h-8 w-8 object-contain" />
@@ -425,18 +651,32 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, shopLog
                             </div>
                         )}
                     </div>
+                    <div className="grid gap-2 md:max-w-sm">
+                        <Label htmlFor="currency-unit">{t('admin.settings.currencyUnit')}</Label>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                            <Input
+                                id="currency-unit"
+                                value={currencyUnitValue}
+                                onChange={(e) => setCurrencyUnitValue(e.target.value)}
+                                placeholder={t('admin.settings.currencyUnitPlaceholder')}
+                                className="flex-1"
+                            />
+                            <Button variant="outline" onClick={handleSaveCurrencyUnit} disabled={savingCurrencyUnit}>
+                                {savingCurrencyUnit ? t('common.processing') : t('common.save')}
+                            </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{t('admin.settings.currencyUnitHint')}</p>
+                    </div>
                     <div className="grid gap-2 md:max-w-xs">
-                        <div className="flex gap-2">
-                            <div className="floating-field flex-1 min-w-0">
-                                <Input
-                                    id="low-stock"
-                                    type="number"
-                                    value={thresholdValue}
-                                    onChange={(e) => setThresholdValue(e.target.value)}
-                                    placeholder=" "
-                                />
-                                <Label htmlFor="low-stock" className="floating-label">{t('admin.settings.lowStockThreshold')}</Label>
-                            </div>
+                        <Label htmlFor="low-stock">{t('admin.settings.lowStockThreshold')}</Label>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                            <Input
+                                id="low-stock"
+                                type="number"
+                                value={thresholdValue}
+                                onChange={(e) => setThresholdValue(e.target.value)}
+                                className="flex-1"
+                            />
                             <Button variant="outline" onClick={handleSaveThreshold} disabled={savingThreshold}>
                                 {savingThreshold ? t('common.processing') : t('common.save')}
                             </Button>
@@ -465,24 +705,99 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, shopLog
                         </Button>
                     </div>
                     {enabledCheckin && (
-                        <div className="grid gap-2 md:max-w-xs">
-                            <div className="flex gap-2">
+                        <div className="grid gap-2 md:max-w-xl">
+                            <div className="flex flex-col gap-2 sm:flex-row">
                                 <div className="floating-field flex-1 min-w-0">
                                     <Input
-                                        id="checkin-reward"
+                                        id="checkin-reward-min"
                                         type="number"
-                                        value={rewardValue}
-                                        onChange={(e) => setRewardValue(e.target.value)}
+                                        min="1"
+                                        step="1"
+                                        value={rewardMinValue}
+                                        onChange={(e) => setRewardMinValue(e.target.value)}
                                         placeholder=" "
                                     />
-                                    <Label htmlFor="checkin-reward" className="floating-label">{t('admin.settings.checkin.rewardTooltip')}</Label>
+                                    <Label htmlFor="checkin-reward-min" className="floating-label">{t('admin.settings.checkin.rewardMinTooltip')}</Label>
+                                </div>
+                                <div className="floating-field flex-1 min-w-0">
+                                    <Input
+                                        id="checkin-reward-max"
+                                        type="number"
+                                        min="1"
+                                        step="1"
+                                        value={rewardMaxValue}
+                                        onChange={(e) => setRewardMaxValue(e.target.value)}
+                                        placeholder=" "
+                                    />
+                                    <Label htmlFor="checkin-reward-max" className="floating-label">{t('admin.settings.checkin.rewardMaxTooltip')}</Label>
                                 </div>
                                 <Button variant="outline" onClick={handleSaveReward} disabled={savingReward}>
                                     {savingReward ? t('common.processing') : t('common.save')}
                                 </Button>
                             </div>
+                            <p className="text-xs text-muted-foreground">{t('admin.settings.checkin.rewardRangeHint')}</p>
+                            <div className="flex flex-col gap-2 sm:flex-row">
+                                <div className="floating-field flex-1 min-w-0">
+                                    <Input
+                                        id="checkin-reward-fixed"
+                                        type="number"
+                                        min="1"
+                                        step="1"
+                                        value={rewardFixedValue}
+                                        onChange={(e) => setRewardFixedValue(e.target.value)}
+                                        placeholder=" "
+                                    />
+                                    <Label htmlFor="checkin-reward-fixed" className="floating-label">{t('admin.settings.checkin.fixedRewardTooltip')}</Label>
+                                </div>
+                                <Button variant="outline" onClick={handleSaveFixedReward} disabled={savingFixedReward}>
+                                    {savingFixedReward ? t('common.processing') : t('common.save')}
+                                </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground">{t('admin.settings.checkin.fixedRewardHint')}</p>
                         </div>
                     )}
+                </CardContent>
+            </Card>
+
+            {/* Points Purchase Settings */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>{t('admin.settings.pointsPurchase.title')}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="flex items-center gap-4">
+                        <Label htmlFor="points-purchase-enable" className="cursor-pointer">{t('admin.settings.pointsPurchase.enableLabel')}</Label>
+                        <Button
+                            id="points-purchase-enable"
+                            variant={pointsPurchaseEnabledValue ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setPointsPurchaseEnabledValue(!pointsPurchaseEnabledValue)}
+                            disabled={savingPointsPurchase}
+                            className={pointsPurchaseEnabledValue ? "bg-green-600 hover:bg-green-700" : ""}
+                        >
+                            {pointsPurchaseEnabledValue ? t('admin.settings.pointsPurchase.enabled') : t('admin.settings.pointsPurchase.disabled')}
+                        </Button>
+                    </div>
+                    <div className="grid gap-2 md:max-w-xs">
+                        <div className="flex gap-2">
+                            <div className="floating-field flex-1 min-w-0">
+                                <Input
+                                    id="points-purchase-rate"
+                                    type="number"
+                                    min="0.01"
+                                    step="0.01"
+                                    value={pointsPurchaseRateValue}
+                                    onChange={(e) => setPointsPurchaseRateValue(e.target.value)}
+                                    placeholder=" "
+                                />
+                                <Label htmlFor="points-purchase-rate" className="floating-label">{t('admin.settings.pointsPurchase.rateLabel')}</Label>
+                            </div>
+                            <Button variant="outline" onClick={handleSavePointsPurchase} disabled={savingPointsPurchase}>
+                                {savingPointsPurchase ? t('common.processing') : t('common.save')}
+                            </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{t('admin.settings.pointsPurchase.hint')}</p>
+                    </div>
                 </CardContent>
             </Card>
 
@@ -573,6 +888,45 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, shopLog
                 </CardContent>
             </Card>
 
+            <Card>
+                <CardHeader>
+                    <CardTitle>{t('admin.settings.themeFont.title')}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground">{t('admin.settings.themeFont.hint')}</p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        {THEME_FONT_VALUES.map((value) => {
+                            const active = selectedThemeFont === value
+                            return (
+                                <button
+                                    key={value}
+                                    type="button"
+                                    onClick={() => handleSaveThemeFont(value)}
+                                    disabled={savingThemeFont}
+                                    className={[
+                                        "rounded-xl border p-4 text-left transition-all",
+                                        active ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "border-border/60 hover:border-primary/40 hover:bg-muted/30",
+                                        savingThemeFont ? "cursor-not-allowed opacity-60" : "cursor-pointer",
+                                    ].join(' ')}
+                                >
+                                    <div className="flex items-center justify-between gap-3">
+                                        <span className="text-sm font-semibold">{t(`admin.settings.themeFont.${value}`)}</span>
+                                        {active && <span className="inline-block h-2.5 w-2.5 rounded-full bg-primary" />}
+                                    </div>
+                                    <p
+                                        className="mt-3 text-xl text-foreground"
+                                        style={{ fontFamily: getThemeFontStack(value) }}
+                                    >
+                                        Ag 你好 字体
+                                    </p>
+                                </button>
+                            )
+                        })}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{t(`admin.settings.themeFont.${selectedThemeFont}`)}</p>
+                </CardContent>
+            </Card>
+
             {registryEnabled && (
                 <Card>
                     <CardHeader>
@@ -600,17 +954,17 @@ export function AdminSettingsContent({ stats, shopName, shopDescription, shopLog
                                 </Label>
                                 <Button
                                     id="registry-hide-nav"
-                                    variant={registryJoined ? "outline" : hideRegistryNav ? "default" : "outline"}
+                                    variant={hideRegistryNav ? "default" : "outline"}
                                     size="sm"
                                     onClick={() => handleToggleRegistryNav(!hideRegistryNav)}
-                                    disabled={savingRegistryNav || registryJoined}
-                                    className={!registryJoined && hideRegistryNav ? "bg-slate-900 hover:bg-slate-800 text-white" : ""}
+                                    disabled={savingRegistryNav}
+                                    className={hideRegistryNav ? "bg-slate-900 hover:bg-slate-800 text-white" : ""}
                                 >
-                                    {registryJoined ? t('registry.hideNavDisabled') : hideRegistryNav ? t('registry.hideNavEnabled') : t('registry.hideNavDisabled')}
+                                    {hideRegistryNav ? t('registry.hideNavEnabled') : t('registry.hideNavDisabled')}
                                 </Button>
                             </div>
                             <p className="text-xs text-muted-foreground">
-                                {registryJoined ? t('registry.hideNavLockedHint') : t('registry.hideNavHint')}
+                                {t('registry.hideNavHint')}
                             </p>
                         </div>
                     </CardContent>

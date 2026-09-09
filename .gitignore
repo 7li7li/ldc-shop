@@ -42,4 +42,8 @@ next-env.d.ts
 .wrangler
 # database
 postgres-data/
+data/
+_docker/data/
+_docker/node_modules/
+_docker/.next/
 

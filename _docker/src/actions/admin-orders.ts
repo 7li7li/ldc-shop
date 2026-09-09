@@ -7,6 +7,7 @@ import { revalidatePath, updateTag } from "next/cache"
 import { checkAdmin } from "@/actions/admin"
 import { recalcProductAggregates, recalcProductAggregatesForMany, createUserNotification } from "@/lib/db/queries"
 import { pullOneCardFromApi } from "@/lib/card-api"
+import { isPointsTopupOrder } from "@/lib/payment"
 
 export async function markOrderPaid(orderId: string) {
   await checkAdmin()
@@ -104,10 +105,10 @@ export async function cancelOrder(orderId: string) {
   // 1. Refund points if used
   const order = await db.query.orders.findFirst({
     where: eq(orders.orderId, orderId),
-    columns: { userId: true, pointsUsed: true, productId: true }
+    columns: { userId: true, pointsUsed: true, productId: true, status: true }
   })
 
-  if (order?.userId && order.pointsUsed && order.pointsUsed > 0) {
+  if (order?.userId && order.pointsUsed && order.pointsUsed > 0 && order.status !== 'cancelled' && order.status !== 'refunded') {
     await db.update(loginUsers)
       .set({ points: sql`${loginUsers.points} + ${order.pointsUsed}` })
       .where(eq(loginUsers.userId, order.userId))
@@ -154,7 +155,7 @@ async function deleteOneOrder(orderId: string) {
   if (!order) return
 
   // Refund points if used
-  if (order.userId && order.pointsUsed && order.pointsUsed > 0) {
+  if (!isPointsTopupOrder(order.productId) && order.userId && order.pointsUsed && order.pointsUsed > 0 && order.status !== 'cancelled' && order.status !== 'refunded') {
     await db.update(loginUsers)
       .set({ points: sql`${loginUsers.points} + ${order.pointsUsed}` })
       .where(eq(loginUsers.userId, order.userId))

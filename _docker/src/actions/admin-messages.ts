@@ -136,7 +136,7 @@ export async function sendAdminMessage(params: {
             .from(loginUsers)
             .where(sql`LOWER(${loginUsers.username}) = ${username}`)
             .limit(1)
-        const ids = rows.map((r) => r.id).filter(Boolean)
+        const ids = rows.map((r: { id: string }) => r.id).filter(Boolean)
         if (ids.length === 0) {
             return { success: false, error: "admin.messages.userNotFound" }
         }
@@ -147,7 +147,7 @@ export async function sendAdminMessage(params: {
             .from(loginUsers)
             .where(eq(loginUsers.userId, targetValue))
             .limit(1)
-        const ids = rows.map((r) => r.id).filter(Boolean)
+        const ids = rows.map((r: { id: string }) => r.id).filter(Boolean)
         if (ids.length === 0) {
             return { success: false, error: "admin.messages.userNotFound" }
         }

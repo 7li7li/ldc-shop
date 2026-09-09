@@ -9,7 +9,7 @@
 > [!IMPORTANT]
 > **⚠️ Vercel 版本已停止更新，请使用 Cloudflare Workers 版本或 Docker 版！**
 > 
-> Workers 版本是当前持续维护的版本，包含所有最新功能。Docker 版可能会滞后更新。
+> Workers 与 Docker 版本共享当前功能集；Docker 版将运行时数据库替换为本地 SQLite，适合自托管。
 
 > 🚀 **推荐部署方式：Cloudflare Workers 或 Docker 自托管**
 > 

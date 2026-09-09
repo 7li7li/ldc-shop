@@ -6,11 +6,8 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
-RUN \
-  if [ -f package-lock.json ]; then npm ci; \
-  else npm install; \
-  fi
+COPY package.json package-lock.json ./
+RUN npm ci
 
 # --- Builder ---
 FROM base AS builder
@@ -24,8 +21,6 @@ RUN npm run build
 # --- Runner ---
 FROM base AS runner
 WORKDIR /app
-
-RUN apk add --no-cache curl
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -48,6 +43,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 
 # Cron script
 COPY --from=builder --chown=nextjs:nodejs /app/cron.mjs ./cron.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/migrate.mjs ./migrate.mjs
 
 # Data directory for SQLite
 RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data && chmod 777 /app/data
@@ -57,7 +53,9 @@ RUN mkdir -p .next && chown nextjs:nodejs .next
 
 # Entrypoint
 COPY entrypoint.sh ./entrypoint.sh
-RUN chmod +x ./entrypoint.sh
+RUN tr -d '\015' < ./entrypoint.sh > /tmp/entrypoint.sh \
+  && mv /tmp/entrypoint.sh ./entrypoint.sh \
+  && chmod +x ./entrypoint.sh
 
 USER nextjs
 

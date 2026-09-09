@@ -90,8 +90,8 @@ export async function checkForUpdates(): Promise<UpdateCheckResult> {
 
 // Compare semver versions: returns 1 if a > b, -1 if a < b, 0 if equal
 function compareVersions(a: string, b: string): number {
-    const partsA = a.split('-')[0].split('.').map(Number)
-    const partsB = b.split('-')[0].split('.').map(Number)
+    const partsA = a.split('.').map(Number)
+    const partsB = b.split('.').map(Number)
 
     for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
         const partA = partsA[i] || 0

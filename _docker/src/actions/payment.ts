@@ -8,6 +8,7 @@ import { cookies } from "next/headers"
 import { PAYMENT_PRODUCT_ID, PAYMENT_PRODUCT_NAME } from "@/lib/payment"
 import { withOrderColumnFallback } from "@/lib/db/queries"
 import { getAdminUsernames } from "@/lib/admin-auth"
+import { resolveSiteBaseUrl } from "@/lib/site-url"
 
 function normalizeAmount(input: number | string) {
     const parsed = Number.parseFloat(String(input))
@@ -57,7 +58,7 @@ export async function createPaymentOrder(amountInput: number | string, payeeInpu
     const cookieStore = await cookies()
     cookieStore.set('ldc_pending_order', orderId, { secure: true, path: '/', sameSite: 'lax' })
 
-    const baseUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const baseUrl = await resolveSiteBaseUrl()
     const payParams: Record<string, any> = {
         pid: process.env.MERCHANT_ID!,
         type: 'epay',

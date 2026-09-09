@@ -13,8 +13,7 @@ import { cn } from "@/lib/utils"
 
 function downloadUrl(params: Record<string, string>) {
   const search = new URLSearchParams(params)
-  // Ensure we point to the correct download API
-  return `/admin/export/download?${search.toString()}`.replace('/export/', '/data/')
+  return `/admin/data/download?${search.toString()}`
 }
 
 export function AdminDataContent({ shopName }: { shopName: string | null }) {
@@ -114,7 +113,7 @@ export function AdminDataContent({ shopName }: { shopName: string | null }) {
               <CardContent className="space-y-4">
                 <p className="text-sm text-muted-foreground">{t('admin.export.fullDumpHint')}</p>
                 <Button asChild>
-                  <a href={downloadUrl({ type: "full", format: "sql" })}>{t('admin.export.d1Sql')}</a>
+                  <a href={downloadUrl({ type: "full", format: "sql" })}>{t('admin.export.sqliteSql')}</a>
                 </Button>
               </CardContent>
             </Card>

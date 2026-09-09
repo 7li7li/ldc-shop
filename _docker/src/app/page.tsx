@@ -1,4 +1,4 @@
-import { getActiveProductCategories, getCategories, getActiveProducts, getVisitorCount, getUserPendingOrders, getSetting, getLiveCardStats } from "@/lib/db/queries";
+import { getActiveProductCategories, getCategories, getActiveProducts, getUserPendingOrders, getSetting, getLiveCardStats } from "@/lib/db/queries";
 import { getActiveAnnouncement } from "@/actions/settings";
 import { auth } from "@/lib/auth";
 import { HomeContent } from "@/components/home-content";
@@ -32,56 +32,77 @@ export default async function Home({
   const trustLevel = Number.isFinite(Number(session?.user?.trustLevel)) ? Number(session?.user?.trustLevel) : 0
 
   // Run all independent queries in parallel for better performance
-  const [products, announcement, visitorCount, categoryConfig, productCategories, wishlistEnabled] = await Promise.all([
+  const [products, announcement, categoryConfig, productCategories, checkinEnabled, pointsPurchaseEnabled, pointsPurchaseRate, homeTitle, homeSubtitle] = await Promise.all([
     getActiveProducts({ isLoggedIn, trustLevel }).catch(() => []),
     getActiveAnnouncement().catch(() => null),
-    getVisitorCount().catch(() => 0),
     getCategories().catch(() => []),
     getActiveProductCategories({ isLoggedIn, trustLevel }).catch(() => []),
     (async () => {
       try {
-        return (await getSetting('wishlist_enabled')) === 'true'
+        return (await getSetting('checkin_enabled')) !== 'false'
+      } catch {
+        return true
+      }
+    })(),
+    (async () => {
+      try {
+        return (await getSetting('points_purchase_enabled')) === 'true'
       } catch {
         return false
       }
-    })()
+    })(),
+    (async () => {
+      try {
+        const rate = Number.parseFloat(await getSetting('points_purchase_rate') || '1')
+        return Number.isFinite(rate) && rate > 0 ? rate : 1
+      } catch {
+        return 1
+      }
+    })(),
+    getSetting('home_title').catch(() => null),
+    getSetting('home_subtitle').catch(() => null)
   ]);
 
 
   const total = products.length;
 
-  const liveStats = await getLiveCardStats(products.map((p: any) => p.id)).catch(() => new Map());
-
-  /* REMOVED: Separate ratings fetch - using pre-computed values in product table
-  const productIds = products.map((p: any) => p.id).filter(Boolean);
-  const sortedIds = [...productIds].sort();
-  let ratingsMap = new Map<string, { average: number; count: number }>();
-  try {
-    ratingsMap = await unstable_cache(
-      async () => getProductRatings(sortedIds),
-      ["product-ratings", ...sortedIds],
-      { revalidate: CACHE_TTL_SECONDS, tags: [TAG_RATINGS] }
-    )();
-  } catch {
-    // Reviews table might not exist yet
-  }
-  */
+  const allProductIds = products.flatMap((p: any) => p.allVariantIds && p.allVariantIds.length > 1 ? p.allVariantIds : [p.id]);
+  const liveStats = await getLiveCardStats(allProductIds).catch(() => new Map());
 
   const productsWithRatings = products.map((p: any) => {
-    const stat = liveStats.get(p.id) || { unused: 0, available: 0, locked: 0 };
-    const available = p.isShared
-      ? (stat.unused > 0 ? INFINITE_STOCK : 0)
-      : stat.available;
-    const locked = stat.locked;
-    const stockTotal = available >= INFINITE_STOCK ? INFINITE_STOCK : (available + locked);
-    // const rating = ratingsMap.get(p.id) || { average: 0, count: 0 };
+    const isGroup = p.allVariantIds && p.allVariantIds.length > 1;
+
+    let stockTotal: number;
+    if (isGroup) {
+      let groupAvailable = 0;
+      let groupLocked = 0;
+      let hasInfinite = false;
+      for (const vid of p.allVariantIds) {
+        const vStat = liveStats.get(vid) || { unused: 0, available: 0, locked: 0 };
+        if (vStat.available >= INFINITE_STOCK || (p.groupShared && vStat.unused > 0)) {
+          hasInfinite = true;
+        }
+        groupAvailable += vStat.available;
+        groupLocked += vStat.locked;
+      }
+      stockTotal = hasInfinite ? INFINITE_STOCK : (groupAvailable + groupLocked);
+    } else {
+      const stat = liveStats.get(p.id) || { unused: 0, available: 0, locked: 0 };
+      const available = p.isShared
+        ? (stat.unused > 0 ? INFINITE_STOCK : 0)
+        : stat.available;
+      const locked = stat.locked;
+      stockTotal = available >= INFINITE_STOCK ? INFINITE_STOCK : (available + locked);
+    }
+
     return {
       ...p,
       stockCount: stockTotal,
-      soldCount: p.sold || 0,
+      soldCount: isGroup ? (p.totalSold || 0) : (p.sold || 0),
+      isHot: isGroup ? (p.groupHot || false) : p.isHot,
       descriptionPlain: stripMarkdown(p.description || ''),
-      rating: Number(p.rating || 0),
-      reviewCount: Number(p.reviewCount || 0)
+      rating: isGroup ? Number(p.avgRating || 0) : Number(p.rating || 0),
+      reviewCount: isGroup ? Number(p.totalReviewCount || 0) : Number(p.reviewCount || 0)
     };
   });
 
@@ -104,11 +125,15 @@ export default async function Home({
   return <HomeContent
     products={productsWithRatings}
     announcement={announcement}
-    visitorCount={visitorCount}
     categories={categories}
     categoryConfig={categoryConfig}
     pendingOrders={pendingOrders}
-    wishlistEnabled={wishlistEnabled}
+    isLoggedIn={isLoggedIn}
+    checkinEnabled={checkinEnabled}
+    pointsPurchaseEnabled={pointsPurchaseEnabled}
+    pointsPurchaseRate={pointsPurchaseRate}
+    homeTitle={homeTitle}
+    homeSubtitle={homeSubtitle}
     filters={{ q, category: category || null, sort }}
     pagination={{ page, pageSize: PAGE_SIZE, total }}
   />;

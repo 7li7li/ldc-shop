@@ -6,6 +6,24 @@ import { and, eq, sql, inArray } from "drizzle-orm"
 import { revalidatePath, updateTag } from "next/cache"
 import { getSetting, recalcProductAggregates } from "@/lib/db/queries"
 import { checkAdmin } from "@/actions/admin"
+import { isPointsTopupOrder } from "@/lib/payment"
+
+async function ensurePointsTopupRefundable(order: typeof orders.$inferSelect) {
+    if (!isPointsTopupOrder(order.productId) || order.status === 'cancelled' || order.status === 'refunded') return
+    if (!order.userId) throw new Error("Missing user for points top-up order")
+
+    const pointsToReclaim = Math.max(0, Number(order.quantity || 0))
+    if (pointsToReclaim <= 0) return
+
+    const user = await db.query.loginUsers.findFirst({
+        where: eq(loginUsers.userId, order.userId),
+        columns: { points: true }
+    })
+    const currentPoints = Number(user?.points || 0)
+    if (currentPoints < pointsToReclaim) {
+        throw new Error("pointsPurchase.refundInsufficientPoints")
+    }
+}
 
 export async function markOrderRefunded(orderId: string) {
     await checkAdmin()
@@ -14,8 +32,17 @@ export async function markOrderRefunded(orderId: string) {
     const order = await db.query.orders.findFirst({ where: eq(orders.orderId, orderId) })
     if (!order) throw new Error("Order not found")
 
-    // Refund points if used
-    if (order.userId && order.pointsUsed && order.pointsUsed > 0) {
+    await ensurePointsTopupRefundable(order)
+
+    if (isPointsTopupOrder(order.productId) && order.userId && order.status !== 'cancelled' && order.status !== 'refunded') {
+        const pointsToReclaim = Math.max(0, Number(order.quantity || 0))
+        if (pointsToReclaim > 0) {
+            await db.update(loginUsers)
+                .set({ points: sql`${loginUsers.points} - ${pointsToReclaim}` })
+                .where(eq(loginUsers.userId, order.userId))
+        }
+    } else if (order.userId && order.pointsUsed && order.pointsUsed > 0 && order.status !== 'cancelled' && order.status !== 'refunded') {
+        // Refund points if used
         await db.update(loginUsers)
             .set({ points: sql`${loginUsers.points} + ${order.pointsUsed}` })
             .where(eq(loginUsers.userId, order.userId))
@@ -48,10 +75,10 @@ export async function markOrderRefunded(orderId: string) {
         const rawIds = order.cardIds || '';
         const parsedIds = rawIds
             .split(',')
-            .map((id) => Number(id.trim()))
-            .filter((id) => Number.isFinite(id));
+            .map((id: string) => Number(id.trim()))
+            .filter((id: number) => Number.isFinite(id));
 
-        const uniqueIds = Array.from(new Set(parsedIds));
+        const uniqueIds: number[] = Array.from(new Set(parsedIds));
 
         if (uniqueIds.length > 0) {
             await db.update(cards).set({ isUsed: false, usedAt: null, reservedOrderId: null, reservedAt: null })
@@ -104,6 +131,8 @@ export async function proxyRefund(orderId: string) {
     const order = await db.query.orders.findFirst({ where: eq(orders.orderId, orderId) })
     if (!order) throw new Error("Order not found")
     if (!order.tradeNo) throw new Error("Missing trade_no")
+
+    await ensurePointsTopupRefundable(order)
 
     const body = new URLSearchParams({
         pid,

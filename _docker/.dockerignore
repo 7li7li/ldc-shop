@@ -1,9 +1,7 @@
 node_modules
 .next
-.git
-.gitignore
-*.md
 data
-.env*
-.DS_Store
-.vscode
+.env
+.env.*
+npm-debug.log*
+.git

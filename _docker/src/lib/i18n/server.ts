@@ -2,6 +2,8 @@ import { cookies, headers } from "next/headers"
 import en from '@/locales/en.json'
 import zh from '@/locales/zh.json'
 import { detectLocaleFromAcceptLanguage, isLocale, type Locale } from "./shared"
+import { getSetting } from "@/lib/db/queries"
+import { resolveCurrencyUnit } from "@/lib/currency-unit"
 
 type Translations = typeof en
 
@@ -28,10 +30,13 @@ export async function detectServerLocale(): Promise<Locale> {
 }
 
 export async function getServerI18n() {
-  const locale = await detectServerLocale()
+  const [locale, currencyUnit] = await Promise.all([
+    detectServerLocale(),
+    getSetting('currency_unit').catch(() => null),
+  ])
   const t = (key: string, params?: Record<string, string | number>): string => {
     const text = getNestedValue(translations[locale], key)
-    return interpolate(text, params)
+    return interpolate(text, { currencyUnit: resolveCurrencyUnit(locale, currencyUnit), ...params })
   }
   return { locale, t }
 }

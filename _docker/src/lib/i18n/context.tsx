@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import en from '@/locales/en.json'
 import zh from '@/locales/zh.json'
 import { isLocale, type Locale } from './shared'
+import { resolveCurrencyUnit } from '@/lib/currency-unit'
 
 type Translations = typeof en
 
@@ -28,7 +29,15 @@ function interpolate(text: string, params?: Record<string, string | number>): st
     }, text)
 }
 
-export function I18nProvider({ children, initialLocale = 'en' }: { children: ReactNode; initialLocale?: Locale }) {
+export function I18nProvider({
+    children,
+    initialLocale = 'en',
+    currencyUnit = null,
+}: {
+    children: ReactNode
+    initialLocale?: Locale
+    currencyUnit?: string | null
+}) {
     const [locale, setLocaleState] = useState<Locale>(initialLocale)
 
     useEffect(() => {
@@ -51,7 +60,7 @@ export function I18nProvider({ children, initialLocale = 'en' }: { children: Rea
 
     const t = (key: string, params?: Record<string, string | number>): string => {
         const text = getNestedValue(translations[locale], key)
-        return interpolate(text, params)
+        return interpolate(text, { currencyUnit: resolveCurrencyUnit(locale, currencyUnit), ...params })
     }
 
     return (
@@ -70,7 +79,7 @@ export function useI18n() {
             setLocale: () => { },
             t: (key: string, params?: Record<string, string | number>) => {
                 const text = getNestedValue(en, key)
-                return interpolate(text, params)
+                return interpolate(text, { currencyUnit: resolveCurrencyUnit('en', null), ...params })
             }
         }
     }

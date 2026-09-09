@@ -40,6 +40,7 @@ export function CardsContent({ productId, productName, unusedCards, apiConfig }:
     const [deletingId, setDeletingId] = useState<number | null>(null)
     const [confirmOpen, setConfirmOpen] = useState(false)
     const [pendingCount, setPendingCount] = useState(0)
+    const [pendingHasExpiry, setPendingHasExpiry] = useState(false)
     const [apiEnabled, setApiEnabled] = useState(apiConfig.enabled)
     const [apiUrl, setApiUrl] = useState(apiConfig.url)
     const [apiToken, setApiToken] = useState(apiConfig.token)
@@ -114,6 +115,7 @@ export function CardsContent({ productId, productName, unusedCards, apiConfig }:
         const formData = pendingFormRef.current
         if (!formData) {
             setConfirmOpen(false)
+            setPendingHasExpiry(false)
             return
         }
         setConfirmOpen(false)
@@ -123,11 +125,23 @@ export function CardsContent({ productId, productName, unusedCards, apiConfig }:
 
     const handleOpenConfirm = (formData: FormData) => {
         const raw = String(formData.get('cards') || '')
+        const hoursRaw = String(formData.get('expires_hours') || '').trim()
+        const minutesRaw = String(formData.get('expires_minutes') || '').trim()
         const count = raw
             .split(/\r?\n|,/)
             .map((item) => item.trim())
             .filter(Boolean).length
+        const hours = hoursRaw === '' ? 0 : Number(hoursRaw)
+        const minutes = minutesRaw === '' ? 0 : Number(minutesRaw)
+        const hasExpiry =
+            Number.isInteger(hours) &&
+            Number.isInteger(minutes) &&
+            hours >= 0 &&
+            minutes >= 0 &&
+            minutes <= 59 &&
+            hours * 60 + minutes > 0
         setPendingCount(count)
+        setPendingHasExpiry(hasExpiry)
         pendingFormRef.current = formData
         setConfirmOpen(true)
     }
@@ -222,11 +236,26 @@ export function CardsContent({ productId, productName, unusedCards, apiConfig }:
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="space-y-1">
                                             <label className="text-xs text-muted-foreground">{t('admin.cards.expiryHours')}</label>
-                                            <Input name="expires_hours" type="number" min="0" step="1" disabled={submitting} />
+                                            <Input
+                                                name="expires_hours"
+                                                type="number"
+                                                min="0"
+                                                step="1"
+                                                onWheel={(event) => event.currentTarget.blur()}
+                                                disabled={submitting}
+                                            />
                                         </div>
                                         <div className="space-y-1">
                                             <label className="text-xs text-muted-foreground">{t('admin.cards.expiryMinutes')}</label>
-                                            <Input name="expires_minutes" type="number" min="0" max="59" step="1" disabled={submitting} />
+                                            <Input
+                                                name="expires_minutes"
+                                                type="number"
+                                                min="0"
+                                                max="59"
+                                                step="1"
+                                                onWheel={(event) => event.currentTarget.blur()}
+                                                disabled={submitting}
+                                            />
                                         </div>
                                     </div>
                                     <p className="text-xs text-muted-foreground">{t('admin.cards.expiryHint')}</p>
@@ -365,13 +394,27 @@ export function CardsContent({ productId, productName, unusedCards, apiConfig }:
                 </Card>
             </div>
 
-            <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+            <Dialog
+                open={confirmOpen}
+                onOpenChange={(open) => {
+                    setConfirmOpen(open)
+                    if (!open) {
+                        pendingFormRef.current = null
+                        setPendingHasExpiry(false)
+                    }
+                }}
+            >
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>{t('admin.cards.confirmAddTitle')}</DialogTitle>
                         <DialogDescription>
                             {t('admin.cards.confirmAddDescription', { count: pendingCount })}
                         </DialogDescription>
+                        {pendingHasExpiry ? (
+                            <p className="text-sm text-amber-600 dark:text-amber-400">
+                                {t('admin.cards.confirmAddExpiryNotice')}
+                            </p>
+                        ) : null}
                     </DialogHeader>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setConfirmOpen(false)}>

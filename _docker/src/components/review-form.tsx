@@ -78,13 +78,15 @@ export function ReviewForm({ productId, orderId, onSuccess }: ReviewFormProps) {
             {error && (
                 <p className="text-sm text-destructive">{error}</p>
             )}
-            <Button
-                onClick={handleSubmit}
-                disabled={submitting}
-                className="w-full bg-gradient-to-r from-primary to-primary/80"
-            >
-                {submitting ? t('common.processing') : t('review.submit')}
-            </Button>
+            <div className="flex justify-end pt-1">
+                <Button
+                    onClick={handleSubmit}
+                    disabled={submitting}
+                    className="h-10 rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground shadow-[0_10px_24px_-16px_rgba(15,23,42,0.55)] transition-all hover:bg-primary/92 hover:shadow-[0_14px_32px_-18px_rgba(15,23,42,0.6)]"
+                >
+                    {submitting ? t('common.processing') : t('review.submit')}
+                </Button>
+            </div>
         </div>
     )
 }

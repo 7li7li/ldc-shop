@@ -1,12 +1,15 @@
 'use client'
 
 import { useEffect, useMemo, useState } from "react"
+import { buildDefaultLogoDataUrl } from "@/lib/default-logo"
+import { isLikelyLinuxDoAvatarUrl } from "@/lib/shop-logo"
 import { cn } from "@/lib/utils"
 
 interface ShopLogoProps {
     name: string
     url: string
     logo?: string | null
+    updatedAt?: number | null
 }
 
 function getOrigin(url: string) {
@@ -17,22 +20,25 @@ function getOrigin(url: string) {
     }
 }
 
-export function ShopLogo({ name, url, logo }: ShopLogoProps) {
+export function ShopLogo({ name, url, logo, updatedAt }: ShopLogoProps) {
     const [error, setError] = useState(false)
     const [index, setIndex] = useState(0)
-    const fallbackLetter = name?.trim()?.slice(0, 1) || "L"
     const candidates = useMemo(() => {
         const list: string[] = []
         const trimmedLogo = (logo || "").trim()
-        if (trimmedLogo) list.push(trimmedLogo)
+        if (trimmedLogo && !isLikelyLinuxDoAvatarUrl(trimmedLogo)) {
+            list.push(trimmedLogo)
+        }
         const origin = getOrigin(url)
         if (origin) {
+            const favicon = updatedAt ? `${origin}/favicon?v=${updatedAt}` : `${origin}/favicon`
+            list.push(favicon)
             list.push(`${origin}/icon.svg`)
-            list.push(`${origin}/favicon`)
             list.push(`${origin}/favicon.ico`)
         }
+        list.push(buildDefaultLogoDataUrl(`${name}|${url}`))
         return Array.from(new Set(list))
-    }, [logo, url])
+    }, [logo, name, updatedAt, url])
 
     useEffect(() => {
         setError(false)
@@ -53,17 +59,27 @@ export function ShopLogo({ name, url, logo }: ShopLogoProps) {
                     src={src}
                     alt={name}
                     className="h-12 w-12 rounded-xl object-cover"
+                    loading="lazy"
+                    decoding="async"
+                    fetchPriority="low"
                     referrerPolicy="no-referrer"
                     onError={() => {
                         if (index + 1 < candidates.length) {
-                            setIndex(index + 1)
+                            setIndex((current) => current + 1)
                         } else {
                             setError(true)
                         }
                     }}
                 />
             ) : (
-                fallbackLetter
+                <img
+                    src={buildDefaultLogoDataUrl(`${name}|${url}`)}
+                    alt={name}
+                    className="h-12 w-12 rounded-xl object-cover"
+                    loading="lazy"
+                    decoding="async"
+                    fetchPriority="low"
+                />
             )}
         </div>
     )

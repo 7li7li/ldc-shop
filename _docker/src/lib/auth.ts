@@ -12,7 +12,10 @@ const providers: any[] = [
         id: "linuxdo",
         name: "Linux DO",
         type: "oauth",
-        authorization: "https://connect.linux.do/oauth2/authorize",
+        authorization: {
+            url: "https://connect.linux.do/oauth2/authorize",
+            params: { scope: "openid profile email" },
+        },
         token: {
             url: "https://connect.linux.do/oauth2/token",
             async conform(response: Response) {
@@ -45,8 +48,14 @@ const providers: any[] = [
         clientId: process.env.OAUTH_CLIENT_ID,
         clientSecret: process.env.OAUTH_CLIENT_SECRET,
         profile(profile: any) {
+            const profileId = getLinuxDoProfileId(profile)
+            if (!profileId) {
+                console.error("[auth] linuxdo profile id missing in provider profile", getLinuxDoProfileDebug(profile))
+                throw new Error("LINUXDO_PROFILE_ID_MISSING")
+            }
+
             return {
-                id: String(profile.id),
+                id: profileId,
                 name: profile.username || profile.name,
                 email: profile.email,
                 image: profile.avatar_url,
@@ -59,9 +68,8 @@ const providers: any[] = [
 ]
 
 async function resolveExistingGitHubUserIdByUsername(username?: string | null) {
-    if (!username) return null
-    const normalizedUsername = username.trim().toLowerCase()
-    if (!normalizedUsername.startsWith("gh_")) return null
+    const normalizedUsername = normalizeGitHubUsername(username, null, null)
+    if (!normalizedUsername) return null
 
     try {
         const rows = await db
@@ -76,14 +84,72 @@ async function resolveExistingGitHubUserIdByUsername(username?: string | null) {
     }
 }
 
+function normalizeAuthScalar(rawValue: unknown): string | null {
+    if (rawValue === undefined || rawValue === null) return null
+    const normalized = String(rawValue).trim()
+    if (!normalized) return null
+    const lowered = normalized.toLowerCase()
+    if (lowered === "undefined" || lowered === "null" || lowered === "nan") return null
+    return normalized
+}
+
+function getLinuxDoProfileId(profile: any): string | null {
+    return normalizeAuthScalar(profile?.id)
+        || normalizeAuthScalar(profile?.sub)
+        || normalizeAuthScalar(profile?.user_id)
+        || normalizeAuthScalar(profile?.userId)
+}
+
+function getLinuxDoProfileDebug(profile: any) {
+    return {
+        profileId: profile?.id ?? null,
+        sub: profile?.sub ?? null,
+        userId: profile?.user_id ?? profile?.userId ?? null,
+        username: profile?.username ?? null,
+        keys: profile && typeof profile === "object" ? Object.keys(profile) : [],
+    }
+}
+
 function normalizeGitHubUserId(rawId?: string | null) {
-    if (!rawId) return null
-    let normalized = String(rawId).trim()
+    const base = normalizeAuthScalar(rawId)
+    if (!base) return null
+    let normalized = base
     while (normalized.toLowerCase().startsWith("github:")) {
         normalized = normalized.slice("github:".length)
     }
-    if (!normalized) return null
-    return `github:${normalized}`
+    const sanitized = normalizeAuthScalar(normalized)
+    if (!sanitized) return null
+    return `github:${sanitized}`
+}
+
+function normalizeGitHubLogin(rawLogin: unknown, fallbackId: unknown): string | null {
+    const normalizedLogin = normalizeAuthScalar(rawLogin)?.toLowerCase()
+    if (normalizedLogin) return normalizedLogin
+
+    const initialFallback = normalizeAuthScalar(fallbackId)
+    if (!initialFallback) return null
+
+    let normalizedFallback = initialFallback
+    while (normalizedFallback.toLowerCase().startsWith("github:")) {
+        normalizedFallback = normalizedFallback.slice("github:".length)
+    }
+
+    const sanitizedFallback = normalizeAuthScalar(normalizedFallback)
+    return sanitizedFallback ? sanitizedFallback.toLowerCase() : null
+}
+
+function normalizeGitHubUsername(rawUsername: unknown, rawLogin: unknown, fallbackId: unknown): string | null {
+    const normalizedUsername = normalizeAuthScalar(rawUsername)?.toLowerCase()
+    if (normalizedUsername) {
+        const withoutPrefix = normalizedUsername.startsWith("gh_")
+            ? normalizedUsername.slice("gh_".length)
+            : normalizedUsername
+        const normalizedExisting = normalizeGitHubLogin(withoutPrefix, null)
+        if (normalizedExisting) return `gh_${normalizedExisting}`
+    }
+
+    const normalizedLogin = normalizeGitHubLogin(rawLogin, fallbackId)
+    return normalizedLogin ? `gh_${normalizedLogin}` : null
 }
 
 function asTimestampMs(value: Date | number | string | null | undefined): number | null {
@@ -271,17 +337,32 @@ if (githubClientId && githubClientSecret) {
             clientId: githubClientId,
             clientSecret: githubClientSecret,
             profile(profile) {
-                const rawLogin = typeof profile.login === "string" && profile.login.trim().length > 0
-                    ? profile.login
-                    : String(profile.id)
-                const login = rawLogin.toLowerCase()
+                const providerId = normalizeAuthScalar(profile.id)
+                if (!providerId) {
+                    console.error("[auth] github profile.id missing in provider profile", {
+                        profileId: profile.id ?? null,
+                        login: profile.login ?? null,
+                    })
+                    throw new Error("GITHUB_PROFILE_ID_MISSING")
+                }
+
+                const username = normalizeGitHubUsername(null, profile.login, providerId)
+                if (!username) {
+                    console.error("[auth] github profile.login missing in provider profile", {
+                        profileId: profile.id ?? null,
+                        login: profile.login ?? null,
+                    })
+                    throw new Error("GITHUB_LOGIN_MISSING")
+                }
+
+                const displayLogin = normalizeGitHubLogin(profile.login, providerId)
                 return {
-                    id: String(profile.id),
-                    name: profile.name || rawLogin,
+                    id: providerId,
+                    name: profile.name || displayLogin || providerId,
                     email: profile.email,
                     image: profile.avatar_url,
                     // Prefix GitHub usernames to avoid collisions with Linux DO usernames.
-                    username: `gh_${login}`,
+                    username,
                     avatar_url: profile.avatar_url,
                 }
             },
@@ -300,17 +381,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 let resolvedUsername = user.username ? String(user.username) : null
 
                 if (account?.provider === "linuxdo") {
-                    // Match legacy working behavior: Linux DO id must come from profile.id only.
-                    const rawLinuxDoId = (profile as any)?.id
-                    const linuxDoId =
-                        rawLinuxDoId === undefined || rawLinuxDoId === null
-                            ? null
-                            : String(rawLinuxDoId).trim()
+                    const linuxDoId = getLinuxDoProfileId(profile)
                     if (!linuxDoId) {
-                        console.error("[auth] linuxdo profile.id missing in jwt callback", {
-                            profileId: (profile as any)?.id ?? null,
-                            username: (profile as any)?.username ?? null,
-                        })
+                        console.error("[auth] linuxdo profile id missing in jwt callback", getLinuxDoProfileDebug(profile))
                         throw new Error("LINUXDO_PROFILE_ID_MISSING")
                     }
 
@@ -319,13 +392,23 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         resolvedUsername = String((profile as any).username)
                     }
                 } else if (account?.provider === "github") {
-                    if (resolvedUsername) {
-                        resolvedUsername = resolvedUsername.toLowerCase()
-                    }
+                    resolvedUsername = normalizeGitHubUsername(
+                        resolvedUsername,
+                        (profile as any)?.login ?? null,
+                        account.providerAccountId ?? user.id
+                    )
 
                     // Prefer providerAccountId for GitHub; it's the most stable account identifier.
                     const canonicalGitHubId = normalizeGitHubUserId(account.providerAccountId) || normalizeGitHubUserId(String(user.id))
-                    if (canonicalGitHubId) resolvedId = canonicalGitHubId
+                    if (!canonicalGitHubId) {
+                        console.error("[auth] github providerAccountId missing in jwt callback", {
+                            providerAccountId: account.providerAccountId ?? null,
+                            userId: user.id ?? null,
+                            username: resolvedUsername,
+                        })
+                        throw new Error("GITHUB_PROVIDER_ID_MISSING")
+                    }
+                    resolvedId = canonicalGitHubId
 
                     // If this GitHub username already exists in login_users, keep using that user_id.
                     const existingUserId = await resolveExistingGitHubUserIdByUsername(resolvedUsername)
@@ -353,16 +436,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             }
 
             if (profile && account?.provider === "linuxdo") {
-                const rawLinuxDoId = (profile as any)?.id
-                const linuxDoId =
-                    rawLinuxDoId === undefined || rawLinuxDoId === null
-                        ? null
-                        : String(rawLinuxDoId).trim()
+                const linuxDoId = getLinuxDoProfileId(profile)
                 if (!linuxDoId) {
-                    console.error("[auth] linuxdo profile.id missing in profile callback", {
-                        profileId: (profile as any)?.id ?? null,
-                        username: (profile as any)?.username ?? null,
-                    })
+                    console.error("[auth] linuxdo profile id missing in profile callback", getLinuxDoProfileDebug(profile))
                     throw new Error("LINUXDO_PROFILE_ID_MISSING")
                 }
 

@@ -1,9 +1,9 @@
 'use server'
 
 import { auth } from '@/lib/auth'
-import { createReview } from '@/lib/db/queries'
+import { createReview, createReviewReply } from '@/lib/db/queries'
 import { db } from '@/lib/db'
-import { orders } from '@/lib/db/schema'
+import { orders, reviews } from '@/lib/db/schema'
 import { eq, sql } from 'drizzle-orm'
 import { revalidatePath, updateTag } from 'next/cache'
 
@@ -70,7 +70,7 @@ export async function submitReview(
         `)
 
         // Check if already reviewed (now table definitely exists)
-        const existingReview: any[] = await db.all(sql`
+        const existingReview = await db.all(sql`
             SELECT id FROM reviews WHERE order_id = ${orderId} LIMIT 1
         `)
         if (existingReview.length > 0) {
@@ -97,5 +97,66 @@ export async function submitReview(
     } catch (error) {
         console.error('Failed to submit review:', error)
         return { success: false, error: 'review.submitError' }
+    }
+}
+
+export async function submitReviewReply(
+    reviewId: number,
+    productId: string,
+    comment: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const session = await auth()
+        if (!session?.user) {
+            return { success: false, error: 'review.authRequired' }
+        }
+
+        const normalizedComment = comment.trim()
+        if (!normalizedComment) {
+            return { success: false, error: 'review.replyEmpty' }
+        }
+        if (normalizedComment.length > 1000) {
+            return { success: false, error: 'review.replyTooLong' }
+        }
+
+        await db.run(sql`
+            CREATE TABLE IF NOT EXISTS review_replies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                review_id INTEGER NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+                user_id TEXT NOT NULL,
+                username TEXT NOT NULL,
+                comment TEXT NOT NULL,
+                created_at INTEGER DEFAULT (unixepoch() * 1000)
+            )
+        `)
+
+        const review = await db.query.reviews.findFirst({
+            where: eq(reviews.id, reviewId),
+            columns: {
+                id: true,
+                productId: true,
+            }
+        })
+
+        if (!review || review.productId !== productId) {
+            return { success: false, error: 'review.replyInvalidReview' }
+        }
+
+        await createReviewReply({
+            reviewId,
+            userId: session.user.id || '',
+            username: session.user.username || session.user.name || 'Anonymous',
+            comment: normalizedComment,
+        })
+
+        revalidatePath(`/buy/${productId}`)
+        revalidatePath(`/`)
+        updateTag('home:ratings')
+        updateTag('home:products')
+
+        return { success: true }
+    } catch (error) {
+        console.error('Failed to submit review reply:', error)
+        return { success: false, error: 'review.replySubmitError' }
     }
 }
