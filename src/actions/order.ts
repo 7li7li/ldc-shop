@@ -5,9 +5,11 @@ import { queryOrderStatus } from "@/lib/epay"
 import { processOrderFulfillment } from "@/lib/order-processing"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
-import { orders } from "@/lib/db/schema"
-import { eq } from "drizzle-orm"
-import { withOrderColumnFallback } from "@/lib/db/queries"
+import { orders, cards, loginUsers } from "@/lib/db/schema"
+import { and, eq, sql } from "drizzle-orm"
+import { withOrderColumnFallback, recalcProductAggregates } from "@/lib/db/queries"
+import { cookies } from "next/headers"
+import { updateTag } from "next/cache"
 
 export async function checkOrderStatus(orderId: string) {
     const session = await auth()
@@ -26,8 +28,16 @@ export async function checkOrderStatus(orderId: string) {
         return { success: true, status: order.status }
     }
 
+    const cookieStore = await cookies()
+    const pending = cookieStore.get('ldc_pending_order')?.value
+    const hasPendingCookie = pending === orderId
+
     // Allow checking if user owns it OR if they have the pending cookie
-    if (order.userId && order.userId !== session.user.id) {
+    if (order.userId) {
+        if (order.userId !== session.user.id && !hasPendingCookie) {
+            return { success: false, error: 'Unauthorized' }
+        }
+    } else if (!hasPendingCookie) {
         return { success: false, error: 'Unauthorized' }
     }
 
@@ -54,5 +64,63 @@ export async function checkOrderStatus(orderId: string) {
     } catch (e: any) {
         console.error("Check order status failed", e)
         return { success: false, error: e.message }
+    }
+}
+
+export async function cancelPendingOrder(orderId: string) {
+    const session = await auth()
+    if (!session?.user) return { success: false, error: 'common.error' }
+
+    // Check ownership and status
+    const order = await withOrderColumnFallback(async () => {
+        return await db.query.orders.findFirst({
+            where: eq(orders.orderId, orderId),
+            columns: { userId: true, status: true, productId: true, pointsUsed: true }
+        })
+    })
+
+    if (!order) return { success: false, error: 'order.notFound' }
+    if (order.userId !== session.user.id) return { success: false, error: 'common.error' }
+    if (order.status !== 'pending') return { success: false, error: 'order.cannotCancel' }
+
+    try {
+        // Release reserved cards
+        await db.update(cards)
+            .set({ reservedOrderId: null, reservedAt: null })
+            .where(eq(cards.reservedOrderId, orderId))
+
+        const cancelled = await db.update(orders)
+            .set({ status: 'cancelled' })
+            .where(and(eq(orders.orderId, orderId), eq(orders.status, 'pending')))
+            .returning({ userId: orders.userId, pointsUsed: orders.pointsUsed })
+
+        if (!cancelled.length) return { success: false, error: 'order.cannotCancel' }
+
+        const cancelledOrder = cancelled[0]
+        if (cancelledOrder.userId && cancelledOrder.pointsUsed && cancelledOrder.pointsUsed > 0) {
+            await db.update(loginUsers)
+                .set({ points: sql`${loginUsers.points} + ${cancelledOrder.pointsUsed}` })
+                .where(eq(loginUsers.userId, cancelledOrder.userId))
+        }
+
+        revalidatePath(`/order/${orderId}`)
+        revalidatePath('/orders')
+        if (order.productId) {
+            try {
+                await recalcProductAggregates(order.productId)
+            } catch {
+                // best effort
+            }
+        }
+        try {
+            updateTag('home:products')
+        } catch {
+            // best effort
+        }
+
+        return { success: true }
+    } catch (e: any) {
+        console.error("Cancel order failed", e)
+        return { success: false, error: 'common.error' }
     }
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useI18n } from "@/lib/i18n/context"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { saveUserPoints, toggleBlock } from "@/actions/admin-users"
 import { Loader2, Search, ArrowLeft, ArrowRight, Edit, Ban, CheckCircle } from "lucide-react"
+import { getDisplayUsername, getExternalProfileUrl } from "@/lib/user-profile-link"
 
 interface User {
     userId: string
@@ -44,6 +45,8 @@ export function UsersContent({ data }: UsersContentProps) {
     const [editingUser, setEditingUser] = useState<User | null>(null)
     const [newPoints, setNewPoints] = useState('')
     const [saving, setSaving] = useState(false)
+    const [blockingId, setBlockingId] = useState<string | null>(null)
+    const blockLock = useRef<string | null>(null)
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault()
@@ -89,15 +92,21 @@ export function UsersContent({ data }: UsersContentProps) {
     }
 
     const handleToggleBlock = async (user: User) => {
+        if (blockLock.current === user.userId) return
         const action = user.isBlocked ? 'unblock' : 'block'
         if (!confirm(t(`admin.users.confirm${action.charAt(0).toUpperCase() + action.slice(1)}`))) return
 
         try {
+            blockLock.current = user.userId
+            setBlockingId(user.userId)
             await toggleBlock(user.userId, !user.isBlocked)
             toast.success(t('common.success'))
             router.refresh()
         } catch (e: any) {
             toast.error(e.message || t('common.error'))
+        } finally {
+            setBlockingId(null)
+            blockLock.current = null
         }
     }
 
@@ -150,7 +159,20 @@ export function UsersContent({ data }: UsersContentProps) {
                             data.items.map((user) => (
                                 <TableRow key={user.userId}>
                                     <TableCell className="font-mono text-xs">{user.userId}</TableCell>
-                                    <TableCell>{user.username || '-'}</TableCell>
+                                    <TableCell>
+                                        {user.username ? (
+                                            <a
+                                                href={getExternalProfileUrl(user.username, user.userId) || "#"}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="font-medium text-sm hover:underline text-primary"
+                                            >
+                                                {getDisplayUsername(user.username, user.userId)}
+                                            </a>
+                                        ) : (
+                                            '-'
+                                        )}
+                                    </TableCell>
                                     <TableCell className="font-bold">{user.points}</TableCell>
                                     <TableCell>{user.orderCount}</TableCell>
                                     <TableCell className="text-muted-foreground text-xs">
@@ -173,6 +195,7 @@ export function UsersContent({ data }: UsersContentProps) {
                                             size="sm"
                                             onClick={() => handleToggleBlock(user)}
                                             title={user.isBlocked ? t('admin.users.unblock') : t('admin.users.block')}
+                                            disabled={blockingId === user.userId}
                                         >
                                             {user.isBlocked ? <CheckCircle className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
                                         </Button>
@@ -219,7 +242,20 @@ export function UsersContent({ data }: UsersContentProps) {
                         <div className="grid gap-4 py-4">
                             <div className="grid gap-2">
                                 <Label>{t('admin.users.username')}</Label>
-                                <div className="text-sm font-medium">{editingUser.username || editingUser.userId}</div>
+                                <div className="text-sm font-medium">
+                                    {editingUser.username ? (
+                                        <a
+                                            href={getExternalProfileUrl(editingUser.username, editingUser.userId) || "#"}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="hover:underline text-primary"
+                                        >
+                                            {getDisplayUsername(editingUser.username, editingUser.userId)}
+                                        </a>
+                                    ) : (
+                                        editingUser.userId
+                                    )}
+                                </div>
                             </div>
                             <div className="grid gap-2">
                                 <Label>{t('admin.users.currentPoints')}</Label>

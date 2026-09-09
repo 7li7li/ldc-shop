@@ -1,32 +1,13 @@
 services:
   app:
     container_name: ldc-shop
-    build:
-      context: ./_docker
+    build: .
     restart: unless-stopped
     ports:
       - "3000:3000"
     volumes:
       - ./data:/app/data
+    env_file:
+      - .env
     environment:
-      # Public URL. Change both values to the external URL in production.
-      - APP_URL=http://localhost:3000
-      - NEXT_PUBLIC_APP_URL=http://localhost:3000
-
-      # NextAuth
-      - AUTH_TRUST_HOST=true
-      - AUTH_SECRET=replace_with_a_random_secret_string
-
-      # Linux DO Connect OAuth
-      - OAUTH_CLIENT_ID=replace_with_client_id
-      - OAUTH_CLIENT_SECRET=replace_with_client_secret
-
-      # EPay
-      - MERCHANT_ID=replace_with_merchant_id
-      - MERCHANT_KEY=replace_with_merchant_key
-
-      # Admin usernames, separated by commas
-      - ADMIN_USERS=admin
-
-      # Persistent local SQLite database inside the mounted volume
-      - DATABASE_PATH=/app/data/ldc-shop.sqlite
+      DATABASE_PATH: /app/data/ldc-shop.sqlite

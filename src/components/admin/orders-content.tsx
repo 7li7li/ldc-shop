@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useI18n } from "@/lib/i18n/context"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -14,9 +14,12 @@ import { Button } from "@/components/ui/button"
 import { AdminOrderActions } from "@/components/admin/order-actions"
 import { deleteOrders } from "@/actions/admin-orders"
 import { toast } from "sonner"
+import { getDisplayUsername, getExternalProfileUrl } from "@/lib/user-profile-link"
 
 interface Order {
     orderId: string
+    productId?: string | null
+    userId: string | null
     username: string | null
     email: string | null
     productName: string
@@ -47,7 +50,7 @@ function exportUrl(params: Record<string, string | number | undefined | null>) {
         if (!str) return
         sp.set(k, str)
     })
-    return `/admin/export/download?${sp.toString()}`
+    return `/admin/data/download?${sp.toString()}`
 }
 
 export function AdminOrdersContent({
@@ -57,7 +60,7 @@ export function AdminOrdersContent({
     pageSize,
     query,
     status,
-    fulfillment,
+    productVariantLabels = {},
 }: {
     orders: Order[]
     total: number
@@ -65,14 +68,15 @@ export function AdminOrdersContent({
     pageSize: number
     query: string
     status: string
-    fulfillment: string
+    productVariantLabels?: Record<string, string | null>
 }) {
     const { t } = useI18n()
     const router = useRouter()
     const [queryValue, setQueryValue] = useState(query || "")
     const [statusValue, setStatusValue] = useState<string>(status || "all")
-    const [fulfillmentValue, setFulfillmentValue] = useState<string>(fulfillment || "all")
     const [selected, setSelected] = useState<Record<string, boolean>>({})
+    const [deleting, setDeleting] = useState(false)
+    const deleteLock = useRef(false)
 
     const getStatusBadgeVariant = (status: string | null) => {
         switch (status) {
@@ -98,12 +102,8 @@ export function AdminOrdersContent({
     }, [status])
 
     useEffect(() => {
-        setFulfillmentValue(fulfillment || "all")
-    }, [fulfillment])
-
-    useEffect(() => {
         setSelected({})
-    }, [orders, page, status, fulfillment, query])
+    }, [orders, page, status, query])
 
     const statusOptions = [
         { key: 'all', label: t('common.all') },
@@ -124,19 +124,16 @@ export function AdminOrdersContent({
         router.push(buildUrl({
             q: next.q ?? queryValue,
             status: next.status ?? statusValue,
-            fulfillment: fulfillmentValue,
             page: next.page ?? 1,
             pageSize,
         }))
     }
 
-    const applyAllFilters = (next: { q?: string; status?: string; fulfillment?: string; page?: number; pageSize?: number }) => {
+    const applyAllFilters = (next: { q?: string; status?: string; page?: number; pageSize?: number }) => {
         const nextStatus = next.status ?? statusValue
-        const nextFulfillment = next.fulfillment ?? fulfillmentValue
         router.push(buildUrl({
             q: next.q ?? queryValue,
             status: nextStatus,
-            fulfillment: nextFulfillment,
             page: next.page ?? 1,
             pageSize: next.pageSize ?? pageSize,
         }))
@@ -180,28 +177,6 @@ export function AdminOrdersContent({
             </div>
 
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div className="flex flex-wrap gap-2">
-                    {[
-                        { key: 'all', label: t('admin.orders.fulfillmentAll') },
-                        { key: 'needsDelivery', label: t('admin.orders.needsDelivery') },
-                    ].map((f) => (
-                        <Button
-                            key={f.key}
-                            type="button"
-                            variant={fulfillmentValue === f.key ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => {
-                                setFulfillmentValue(f.key)
-                                // Avoid contradictory filters
-                                const nextStatus = f.key === 'needsDelivery' ? 'all' : statusValue
-                                setStatusValue(nextStatus)
-                                applyAllFilters({ fulfillment: f.key, status: nextStatus, page: 1 })
-                            }}
-                        >
-                            {f.label}
-                        </Button>
-                    ))}
-                </div>
                 <div className="flex flex-wrap items-center gap-2">
                     <div className="text-sm text-muted-foreground">
                         {t('admin.orders.selectedCount', { count: selectedIds.length })}
@@ -210,9 +185,12 @@ export function AdminOrdersContent({
                         type="button"
                         variant="destructive"
                         size="sm"
-                        disabled={!selectedIds.length}
+                        disabled={!selectedIds.length || deleting}
                         onClick={async () => {
+                            if (deleteLock.current) return
                             if (!confirm(t('admin.orders.confirmDeleteSelected'))) return
+                            deleteLock.current = true
+                            setDeleting(true)
                             try {
                                 await deleteOrders(selectedIds)
                                 toast.success(t('common.success'))
@@ -220,6 +198,9 @@ export function AdminOrdersContent({
                                 router.refresh()
                             } catch (e: any) {
                                 toast.error(e.message)
+                            } finally {
+                                setDeleting(false)
+                                deleteLock.current = false
                             }
                         }}
                     >
@@ -234,12 +215,12 @@ export function AdminOrdersContent({
                 </div>
                 <div className="flex items-center gap-2">
                     <Button asChild type="button" variant="outline" size="sm">
-                        <a href={exportUrl({ type: 'orders', format: 'csv', q: query, status, fulfillment })}>
+                        <a href={exportUrl({ type: 'orders', format: 'csv', q: query, status })}>
                             {t('admin.orders.exportCsv')}
                         </a>
                     </Button>
                     <Button asChild type="button" variant="outline" size="sm">
-                        <a href={exportUrl({ type: 'orders', format: 'csv', includeSecrets: 1, q: query, status, fulfillment })}>
+                        <a href={exportUrl({ type: 'orders', format: 'csv', includeSecrets: 1, q: query, status })}>
                             {t('admin.orders.exportCsvSecrets')}
                         </a>
                     </Button>
@@ -247,11 +228,10 @@ export function AdminOrdersContent({
                         type="button"
                         variant="outline"
                         size="sm"
-                        disabled={!queryValue.trim() && statusValue === 'all' && fulfillmentValue === 'all'}
+                        disabled={!queryValue.trim() && statusValue === 'all'}
                         onClick={() => {
                             setQueryValue("")
                             setStatusValue("all")
-                            setFulfillmentValue("all")
                             router.push(buildUrl({ page: 1, pageSize }))
                         }}
                     >
@@ -319,12 +299,12 @@ export function AdminOrdersContent({
                                     {order.username ? (
                                         <div className="space-y-0.5">
                                             <a
-                                                href={`https://linux.do/u/${order.username}`}
+                                                href={getExternalProfileUrl(order.username, order.userId) || "#"}
                                                 target="_blank"
                                                 rel="noreferrer"
                                                 className="font-medium text-sm hover:underline text-primary"
                                             >
-                                                {order.username}
+                                                {getDisplayUsername(order.username, order.userId)}
                                             </a>
                                             {order.email && (
                                                 <div className="text-xs text-muted-foreground">
@@ -336,7 +316,12 @@ export function AdminOrdersContent({
                                         <span className="font-medium text-sm text-muted-foreground">Guest</span>
                                     )}
                                 </TableCell>
-                                <TableCell>{order.productName}</TableCell>
+                                <TableCell>
+                                    <span>{order.productName}</span>
+                                    {order.productId && productVariantLabels[order.productId] && (
+                                        <span className="ml-1.5 text-muted-foreground">· {productVariantLabels[order.productId]}</span>
+                                    )}
+                                </TableCell>
                                 <TableCell>{Number(order.amount)}</TableCell>
                                 <TableCell>
                                     <Badge variant={getStatusBadgeVariant(order.status)} className="uppercase text-xs">

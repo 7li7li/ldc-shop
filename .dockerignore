@@ -1,13 +1,7 @@
-Dockerfile
-.dockerignore
 node_modules
-_docker/node_modules
-npm-debug.log
-README.md
 .next
-_docker/.next
 data
-_docker/data
+.env
+.env.*
+npm-debug.log*
 .git
-.env*
-!env.example

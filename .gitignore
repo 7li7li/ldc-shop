@@ -30,20 +30,13 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files
 .env*
+!.env.example
 
-# vercel
-.vercel
+# data directory (SQLite database)
+/data/
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-.wrangler
-# database
-postgres-data/
-data/
-_docker/data/
-_docker/node_modules/
-_docker/.next/
-

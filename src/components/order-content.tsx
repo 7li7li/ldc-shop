@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useI18n } from "@/lib/i18n/context"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -10,21 +10,24 @@ import { CopyButton } from "@/components/copy-button"
 import { ClientDate } from "@/components/client-date"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { requestRefund } from "@/actions/refund-requests"
 import { toast } from "sonner"
 import { useEffect } from "react"
-import { checkOrderStatus } from "@/actions/order"
+import { checkOrderStatus, cancelPendingOrder } from "@/actions/order"
 import { useRouter } from "next/navigation"
-import { isPaymentOrder } from "@/lib/payment"
+import { isPaymentOrder, isPointsTopupOrder } from "@/lib/payment"
 
 interface Order {
     orderId: string
     productId?: string | null
     productName: string
+    productVariantLabel?: string | null
     amount: string
     status: string
     cardKey: string | null
     payee?: string | null
+    quantity?: number | null
     createdAt: Date | null
     paidAt: Date | null
 }
@@ -33,14 +36,33 @@ interface OrderContentProps {
     order: Order
     canViewKey: boolean
     isOwner: boolean
-    refundRequest: { status: string | null; reason: string | null } | null
+    refundRequest: { status: string | null; reason: string | null; adminNote?: string | null } | null
 }
 
 export function OrderContent({ order, canViewKey, isOwner, refundRequest }: OrderContentProps) {
     const { t } = useI18n()
     const [reason, setReason] = useState("")
     const [submitting, setSubmitting] = useState(false)
+    const [confirmOpen, setConfirmOpen] = useState(false)
+    const submitLock = useRef(false)
     const isPayment = isPaymentOrder(order.productId)
+    const isPointsTopup = isPointsTopupOrder(order.productId)
+
+    const handleRefundConfirm = async () => {
+        if (submitLock.current) return
+        submitLock.current = true
+        setSubmitting(true)
+        try {
+            await requestRefund(order.orderId, reason)
+            toast.success(t('refund.requested'))
+            setConfirmOpen(false)
+        } catch (e: any) {
+            toast.error(e.message)
+        } finally {
+            setSubmitting(false)
+            submitLock.current = false
+        }
+    }
 
     const getStatusBadgeVariant = (status: string) => {
         switch (status) {
@@ -58,7 +80,7 @@ export function OrderContent({ order, canViewKey, isOwner, refundRequest }: Orde
 
     const getStatusMessage = (status: string) => {
         switch (status) {
-            case 'paid': return isPayment ? t('payment.paidMessage') : t('order.stockDepleted')
+            case 'paid': return isPayment ? t('payment.paidMessage') : isPointsTopup ? t('pointsPurchase.paidMessage', { points: order.quantity || 0 }) : t('order.stockDepleted')
             case 'cancelled': return t('order.cancelledMessage')
             case 'refunded': return t('order.orderRefunded')
             default: return t('order.waitingPayment')
@@ -139,12 +161,17 @@ export function OrderContent({ order, canViewKey, isOwner, refundRequest }: Orde
                         <div className="flex justify-between items-center p-4 bg-gradient-to-r from-muted/40 to-muted/20 rounded-xl border border-border/30">
                             <div className="space-y-1">
                                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                                    {isPayment ? t('payment.itemLabel') : t('order.product')}
+                                    {isPayment || isPointsTopup ? t('payment.itemLabel') : t('order.product')}
                                 </p>
-                                <p className="font-semibold">{isPayment ? t('payment.title') : order.productName}</p>
+                                <p className="font-semibold">
+                                    {isPayment ? t('payment.title') : isPointsTopup ? t('pointsPurchase.title') : order.productName}
+                                    {!isPayment && !isPointsTopup && order.productVariantLabel && (
+                                        <span className="font-normal text-muted-foreground"> · {order.productVariantLabel}</span>
+                                    )}
+                                </p>
                             </div>
                             <div className="h-12 w-12 bg-gradient-to-br from-primary/20 to-primary/5 rounded-xl flex items-center justify-center border border-primary/20">
-                                {isPayment ? (
+                                {isPayment || isPointsTopup ? (
                                     <CreditCard className="h-5 w-5 text-primary" />
                                 ) : (
                                     <Package className="h-5 w-5 text-primary" />
@@ -200,7 +227,12 @@ export function OrderContent({ order, canViewKey, isOwner, refundRequest }: Orde
                     <Separator className="bg-border/50" />
 
                     {/* Content Display */}
-                    {order.status === 'delivered' && !isPayment ? (
+                    {order.status === 'paid' && isPointsTopup ? (
+                        <div className="flex items-center gap-3 rounded-xl border border-green-500/20 bg-green-500/10 p-4 text-green-600 dark:text-green-400">
+                            <CheckCircle2 className="h-5 w-5" />
+                            <p className="text-sm">{t('pointsPurchase.paidMessage', { points: order.quantity || 0 })}</p>
+                        </div>
+                    ) : order.status === 'delivered' && !isPayment ? (
                         canViewKey ? (
                             <div className="space-y-4">
                                 <h3 className="font-semibold flex items-center gap-2">
@@ -239,14 +271,14 @@ export function OrderContent({ order, canViewKey, isOwner, refundRequest }: Orde
                         )
                     ) : (
                         <div className={`flex items-center justify-between gap-3 p-4 rounded-xl border ${order.status === 'paid'
-                            ? (isPayment
+                            ? (isPayment || isPointsTopup
                                 ? 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20'
                                 : 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20')
                             : 'bg-muted/20 text-muted-foreground border-border/30'
                             }`}>
                             <div className="flex items-center gap-3">
                                 {order.status === 'paid' ? (
-                                    isPayment ? <CheckCircle2 className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />
+                                    isPayment || isPointsTopup ? <CheckCircle2 className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />
                                 ) : (
                                     <Clock className="h-5 w-5" />
                                 )}
@@ -254,88 +286,152 @@ export function OrderContent({ order, canViewKey, isOwner, refundRequest }: Orde
                             </div>
 
                             {isOwner && order.status === 'pending' && (
-                                <Button
-                                    size="sm"
-                                    onClick={async () => {
-                                        setSubmitting(true)
-                                        try {
-                                            const { getRetryPaymentParams } = await import("@/actions/checkout")
-                                            const result = await getRetryPaymentParams(order.orderId)
-                                            if (result.success && result.url && result.params) {
-                                                const form = document.createElement('form')
-                                                form.method = 'POST'
-                                                form.action = result.url
-                                                Object.entries(result.params).forEach(([k, v]) => {
-                                                    const input = document.createElement('input')
-                                                    input.type = 'hidden'
-                                                    input.name = k
-                                                    input.value = String(v)
-                                                    form.appendChild(input)
-                                                })
-                                                document.body.appendChild(form)
-                                                form.submit()
-                                            } else {
-                                                toast.error(result.error ? t(result.error) : t('common.error'))
-                                            }
-                                        } catch (e: any) {
-                                            toast.error(e.message)
-                                        } finally {
-                                            setSubmitting(false)
-                                        }
-                                    }}
-                                    disabled={submitting}
-                                >
-                                    {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : t('common.payNow')}
-                                </Button>
-                            )}
-                        </div>
-                    )}
-
-                    {isOwner && (order.status === 'paid' || order.status === 'delivered') && Number(order.amount) > 0 && (
-                        <>
-                            <Separator className="bg-border/50" />
-                            <div className="space-y-3">
-                                <h3 className="font-semibold">{t('refund.requestTitle')}</h3>
-                                {refundRequest?.status ? (
-                                    <div className="text-sm text-muted-foreground">
-                                        {t('refund.requestStatus', { status: refundRequest.status })}
-                                    </div>
-                                ) : (
-                                    <div className="text-sm text-muted-foreground">
-                                        {t('refund.requestHint')}
-                                    </div>
-                                )}
-                                <Textarea
-                                    value={reason}
-                                    onChange={(e) => setReason(e.target.value)}
-                                    placeholder={t('refund.reasonPlaceholder')}
-                                    rows={3}
-                                    className="resize-none"
-                                    disabled={submitting || !!refundRequest?.status}
-                                />
-                                <div className="flex justify-end">
+                                <div className="flex gap-2">
                                     <Button
+                                        size="sm"
+                                        variant="outline"
                                         onClick={async () => {
+                                            if (!confirm(t('order.confirmCancel'))) return
+                                            if (submitLock.current) return
+                                            submitLock.current = true
                                             setSubmitting(true)
                                             try {
-                                                await requestRefund(order.orderId, reason)
-                                                toast.success(t('refund.requested'))
+                                                const result = await cancelPendingOrder(order.orderId)
+                                                if (result.success) {
+                                                    toast.success(t('order.cancelled'))
+                                                    router.refresh()
+                                                } else {
+                                                    toast.error(result.error ? t(result.error) : t('common.error'))
+                                                }
                                             } catch (e: any) {
                                                 toast.error(e.message)
                                             } finally {
                                                 setSubmitting(false)
+                                                submitLock.current = false
                                             }
                                         }}
-                                        disabled={submitting || !!refundRequest?.status}
+                                        disabled={submitting}
                                     >
-                                        {submitting ? t('common.processing') : t('refund.requestButton')}
+                                        {t('order.cancelOrder')}
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        onClick={async () => {
+                                            if (submitLock.current) return
+                                            submitLock.current = true
+                                            setSubmitting(true)
+                                            try {
+                                                const { getRetryPaymentParams } = await import("@/actions/checkout")
+                                                const result = await getRetryPaymentParams(order.orderId)
+                                                if (result.success && result.params) {
+                                                    const form = document.createElement('form')
+                                                    form.method = 'POST'
+                                                    form.action = '/paying'
+                                                    Object.entries(result.params).forEach(([k, v]) => {
+                                                        const input = document.createElement('input')
+                                                        input.type = 'hidden'
+                                                        input.name = k
+                                                        input.value = String(v)
+                                                        form.appendChild(input)
+                                                    })
+                                                    document.body.appendChild(form)
+                                                    form.submit()
+                                                } else {
+                                                    toast.error(result.error ? t(result.error) : t('common.error'))
+                                                }
+                                            } catch (e: any) {
+                                                toast.error(e.message)
+                                            } finally {
+                                                setSubmitting(false)
+                                                submitLock.current = false
+                                            }
+                                        }}
+                                        disabled={submitting}
+                                    >
+                                        {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : t('common.payNow')}
                                     </Button>
                                 </div>
+                            )}
+                        </div>
+                    )}
+
+                    {isOwner && (order.status === 'paid' || order.status === 'delivered') && (
+                        <>
+                            <Separator className="bg-border/50" />
+                            {refundRequest?.status && (
+                                <div className="space-y-1">
+                                    <h3 className="font-semibold">{t('refund.requestTitle')}</h3>
+                                    <div className="text-sm text-muted-foreground">
+                                        {t('refund.requestStatus', { status: t(`refund.statusValues.${refundRequest.status}`) })}
+                                    </div>
+                                    {refundRequest.adminNote && (
+                                        <div className="text-sm text-muted-foreground">
+                                            {t('refund.adminNote')}{refundRequest.adminNote}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            <div className="flex gap-3">
+                                {order.productId && !isPayment && !isPointsTopup && (
+                                    <Button
+                                        variant="outline"
+                                        className="flex-1"
+                                        onClick={() => {
+                                            window.location.href = `/buy/${order.productId}#reviews`
+                                        }}
+                                    >
+                                        {t('order.goReview')}
+                                    </Button>
+                                )}
+                                {Number(order.amount) > 0 && !refundRequest?.status && (
+                                    <Button
+                                        variant="destructive"
+                                        className={order.productId && !isPayment && !isPointsTopup ? "flex-1" : "w-full"}
+                                        onClick={() => setConfirmOpen(true)}
+                                        disabled={submitting}
+                                    >
+                                        {t('refund.requestTitle')}
+                                    </Button>
+                                )}
                             </div>
                         </>
                     )}
                 </CardContent>
             </Card>
+
+            <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+                <DialogContent className="sm:max-w-[420px]">
+                    <DialogHeader>
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+                                <AlertCircle className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <DialogTitle className="text-base">{t('refund.requestConfirmTitle')}</DialogTitle>
+                                <DialogDescription className="text-sm">
+                                    {t('refund.requestConfirmMessage')}
+                                </DialogDescription>
+                            </div>
+                        </div>
+                    </DialogHeader>
+                    <Textarea
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
+                        placeholder={t('refund.reasonPlaceholder')}
+                        rows={3}
+                        className="resize-none"
+                        disabled={submitting}
+                    />
+                    <DialogFooter className="sm:justify-end">
+                        <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={submitting}>
+                            {t('common.cancel')}
+                        </Button>
+                        <Button variant="destructive" onClick={handleRefundConfirm} disabled={submitting}>
+                            {submitting ? t('common.processing') : t('common.confirm')}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </main>
     )
 }

@@ -1,14 +1,17 @@
 'use client'
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { createOrder } from "@/actions/checkout"
 import { getUserPoints } from "@/actions/points"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Loader2, Coins } from "lucide-react"
+import { Loader2, Coins, ExternalLink } from "lucide-react"
 import { toast } from "sonner"
 import { useI18n } from "@/lib/i18n/context"
+import { cn } from "@/lib/utils"
+import { getSafePurchaseUrl } from "@/lib/purchase-url"
 
 interface BuyButtonProps {
     productId: string
@@ -16,64 +19,99 @@ interface BuyButtonProps {
     productName: string
     disabled?: boolean
     quantity?: number
+    autoOpen?: boolean
+    emailConfigured?: boolean
+    answers?: string[]
+    className?: string
+    purchaseUrl?: string | null
 }
 
-export function BuyButton({ productId, price, productName, disabled, quantity = 1 }: BuyButtonProps) {
+export function BuyButton({ productId, price, productName, disabled, quantity = 1, autoOpen = false, emailConfigured = false, answers, className, purchaseUrl }: BuyButtonProps) {
     const [loading, setLoading] = useState(false)
     const [open, setOpen] = useState(false)
     const [points, setPoints] = useState(0)
     const [usePoints, setUsePoints] = useState(false)
     const [pointsLoading, setPointsLoading] = useState(false)
+    const [hasAutoOpened, setHasAutoOpened] = useState(false)
+    const [email, setEmail] = useState('')
+    const isNavigatingRef = useRef(false)
     const { t } = useI18n()
+    const externalPurchaseUrl = getSafePurchaseUrl(purchaseUrl)
 
     const numericalPrice = Number(price) * quantity
 
-    const handleInitialClick = async () => {
-        if (disabled) return
+    const openDialog = async () => {
+        if (disabled || externalPurchaseUrl) return
         setOpen(true)
         setPointsLoading(true)
         try {
             const p = await getUserPoints()
             setPoints(p)
-            // Auto-check if points cover full price? Maybe not. Let user decide.
+            setUsePoints(p > 0)
         } catch (e) {
             console.error(e)
+            setUsePoints(false)
         } finally {
             setPointsLoading(false)
         }
     }
 
+    // Auto-open dialog when autoOpen is true (after warning confirmation)
+    useEffect(() => {
+        if (autoOpen && !hasAutoOpened && !disabled && !externalPurchaseUrl) {
+            setHasAutoOpened(true)
+            openDialog()
+        }
+    }, [autoOpen, hasAutoOpened, disabled, externalPurchaseUrl])
+
+    const handleInitialClick = async () => {
+        await openDialog()
+    }
+
     const handleBuy = async () => {
+        if (isNavigatingRef.current) return
+
         try {
             setLoading(true)
-            const result = await createOrder(productId, quantity, undefined, usePoints)
+            const result = await createOrder(productId, quantity, email, usePoints, answers)
 
             if (!result?.success) {
                 const message = result?.error ? t(result.error) : t('common.error')
                 toast.error(message)
-                setLoading(false)
+                if (!isNavigatingRef.current) setLoading(false)
+                return
+            }
+
+            if (result.isExternal && result.url) {
+                isNavigatingRef.current = true
+                window.location.href = result.url
                 return
             }
 
             if (result.isZeroPrice && result.url) {
+                // Mark as navigating to prevent further state updates
+                isNavigatingRef.current = true
                 toast.success(t('buy.paymentSuccessPoints'))
                 window.location.href = result.url
                 return
             }
 
-            const { url, params } = result
+            const { params } = result
 
-            if (!params || !url) {
+            if (!params) {
                 toast.error(t('common.error'))
-                setLoading(false)
+                if (!isNavigatingRef.current) setLoading(false)
                 return
             }
 
             if (params) {
-                // Submit Form
+                // Mark as navigating to prevent React errors on Safari
+                isNavigatingRef.current = true
+
+                // Submit Form immediately without closing dialog
                 const form = document.createElement('form')
                 form.method = 'POST'
-                form.action = url as string
+                form.action = '/paying'
 
                 Object.entries(params as Record<string, any>).forEach(([k, v]) => {
                     const input = document.createElement('input')
@@ -85,11 +123,14 @@ export function BuyButton({ productId, price, productName, disabled, quantity = 
 
                 document.body.appendChild(form)
                 form.submit()
+                return
             }
 
         } catch (e: any) {
-            toast.error(e.message || "Failed to create order")
-            setLoading(false)
+            if (!isNavigatingRef.current) {
+                toast.error(e.message || "Failed to create order")
+                setLoading(false)
+            }
         }
     }
 
@@ -97,19 +138,40 @@ export function BuyButton({ productId, price, productName, disabled, quantity = 
     const pointsToUse = usePoints ? Math.min(points, Math.ceil(numericalPrice)) : 0
     const finalPrice = Math.max(0, numericalPrice - pointsToUse)
 
+    if (externalPurchaseUrl) {
+        return (
+            <Button
+                asChild
+                size="lg"
+                className={cn(
+                    "h-12 w-full rounded-xl bg-primary px-6 font-medium text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/25 active:scale-[0.99]",
+                    className
+                )}
+            >
+                <a href={externalPurchaseUrl} target="_blank" rel="noopener noreferrer">
+                    {t('common.goToPurchase')}
+                    <ExternalLink className="ml-2 h-4 w-4" />
+                </a>
+            </Button>
+        )
+    }
+
     return (
         <>
             <Button
                 size="lg"
-                className="w-full md:w-auto bg-foreground text-background hover:bg-foreground/90 cursor-pointer"
+                className={cn(
+                    "h-12 w-full rounded-xl bg-primary px-6 font-medium text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/25 active:scale-[0.99] disabled:opacity-50",
+                    className
+                )}
                 onClick={handleInitialClick}
                 disabled={disabled}
             >
                 {t('common.buyNow')}
             </Button>
 
-            <Dialog open={open} onOpenChange={setOpen}>
-                <DialogContent>
+            <Dialog open={open} onOpenChange={(v) => !isNavigatingRef.current && setOpen(v)}>
+                <DialogContent className="rounded-2xl sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>{t('common.buyNow')}</DialogTitle>
                         <DialogDescription>{productName} {quantity > 1 ? `x ${quantity}` : ''}</DialogDescription>
@@ -120,6 +182,19 @@ export function BuyButton({ productId, price, productName, disabled, quantity = 
                             <span className="font-medium">{t('buy.modal.price')}</span>
                             <span>{numericalPrice.toFixed(2)}</span>
                         </div>
+
+                    <div className="floating-field">
+                        <Input
+                            id="email"
+                            type="text"
+                            placeholder=" "
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                        />
+                        <Label htmlFor="email" className="floating-label">
+                            {emailConfigured ? t('buy.modal.emailLabelConfigured') : t('buy.modal.emailLabelUnconfigured')}
+                        </Label>
+                    </div>
 
                         {points > 0 && (
                             <div className="flex items-center space-x-2 border p-3 rounded-md">
@@ -147,11 +222,11 @@ export function BuyButton({ productId, price, productName, disabled, quantity = 
                         </div>
                     </div>
 
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setOpen(false)} disabled={loading}>
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <Button variant="outline" className="rounded-xl" onClick={() => setOpen(false)} disabled={loading}>
                             {t('common.cancel')}
                         </Button>
-                        <Button onClick={handleBuy} disabled={loading}>
+                        <Button onClick={handleBuy} disabled={loading} className="rounded-xl bg-primary font-medium text-primary-foreground hover:bg-primary/90">
                             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             {finalPrice === 0 ? t('buy.modal.payWithPoints') : t('buy.modal.proceedPayment')}
                         </Button>

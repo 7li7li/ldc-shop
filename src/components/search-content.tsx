@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import ReactMarkdown from "react-markdown"
 import { cn } from "@/lib/utils"
+import { getSafePurchaseUrl } from "@/lib/purchase-url"
 
 type Category = { name: string; icon: string | null; sortOrder: number }
 type Product = {
@@ -23,6 +24,7 @@ type Product = {
   isHot: boolean
   stockCount: number
   soldCount: number
+  purchaseUrl?: string | null
 }
 
 function buildUrl(params: Record<string, string | number | undefined | null>) {
@@ -166,18 +168,20 @@ export function SearchContent(props: {
                 </div>
                 <div className="flex flex-col items-end gap-2 min-w-0">
                   <div className="flex flex-wrap justify-end gap-1.5 opacity-80 hover:opacity-100 transition-opacity">
-                    <Badge variant="outline" className="text-[10px] h-5 px-1.5 text-muted-foreground border-border/50 whitespace-nowrap">
+                    <Badge variant="outline" className="text-[10px] h-5 px-2 text-muted-foreground border-border/50 whitespace-nowrap min-w-max overflow-visible">
                       {t('common.sold')} {product.soldCount}
                     </Badge>
-                    <Badge
-                      variant={product.stockCount > 0 ? "secondary" : "destructive"}
-                      className={cn("text-[10px] h-5 px-1.5 whitespace-nowrap", product.stockCount > 0 ? "" : "")}
-                    >
-                      {product.stockCount > 0 ? `${t('common.stock')} ${product.stockCount}` : t('common.outOfStock')}
-                    </Badge>
+                    {!getSafePurchaseUrl(product.purchaseUrl) && (
+                      <Badge
+                        variant={product.stockCount > 0 ? "secondary" : "destructive"}
+                        className={cn("text-[10px] h-5 px-2 whitespace-nowrap min-w-max overflow-visible")}
+                      >
+                        {product.stockCount > 0 ? `${t('common.stock')} ${product.stockCount}` : t('common.outOfStock')}
+                      </Badge>
+                    )}
                   </div>
                   <Link href={`/buy/${product.id}`} className="w-full">
-                    <Button size="sm" className="w-full bg-foreground text-background hover:bg-foreground/90 whitespace-nowrap shadow-md hover:shadow-lg transition-all">
+                    <Button size="sm" className="w-full bg-primary text-primary-foreground hover:bg-primary/90 whitespace-nowrap shadow-md hover:shadow-lg transition-all">
                       {t('common.viewDetails')}
                     </Button>
                   </Link>
@@ -212,4 +216,3 @@ export function SearchContent(props: {
     </main>
   )
 }
-

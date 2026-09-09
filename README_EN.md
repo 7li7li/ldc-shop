@@ -1,78 +1,120 @@
-# LDC Shop (Next.js + Workers)
+# LDC Shop
 
-[中文说明](./README.md)
+Virtual goods shop built with **Next.js 16**, **SQLite**, and **Shadcn UI**. The project supports local development and Docker self-hosting.
 
----
+## Stack
 
-A serverless virtual goods shop built with **Next.js 16**, **Cloudflare Workers** (OpenNext), **D1 Database**, and **Shadcn UI**.
+- **Framework**: Next.js 16 App Router + TypeScript
+- **Database**: SQLite (`better-sqlite3`)
+- **ORM**: Drizzle ORM
+- **Authentication**: Linux DO Connect, with optional GitHub OAuth
+- **Payments**: EPay
+- **UI**: Tailwind CSS + Shadcn UI + Framer Motion
 
-> [!IMPORTANT]
-> **⚠️ Vercel edition is no longer maintained. Use the Cloudflare Workers or Docker edition.**
-> 
-> The Workers and Docker editions share the current feature set. Docker replaces the runtime database with local SQLite for self-hosting.
+## Local Development
 
-> 🚀 **Recommended: Cloudflare Workers or Docker self-hosted**
-> 
-> | Comparison | Cloudflare Workers | Docker self-hosted | Vercel |
-> |------------|-------------------|---------------------|--------|
-> | Maintenance | **✅ Active** | ✅ Synced | ⚠️ Stopped |
-> | Free requests | **100K/day** | Unlimited | Limited |
-> | Database | **D1 free 5GB** | SQLite unlimited | Postgres quota |
-> | Cold start | **Near zero** | None | Yes |
-> | Requirements | No server | VPS needed | No server |
-> | Global edge | ✅ Worldwide | Single node | Partial |
-> 
-> 👉 **[Full features & Workers deployment guide → `_workers_next/README.md`](./_workers_next/README.md)**
-> 
-> 👉 **[Docker deployment guide → `_docker/README.md`](./_docker/README.md)**
+Node.js 20 or newer is required.
 
-## 📢 Login status (2026-03-04)
+```bash
+git clone https://github.com/chatgptuk/ldc-shop.git
+cd ldc-shop
+npm ci
+cp .env.example .env.local
+npm run db:push
+npm run dev
+```
 
-`Linux DO Connect` OAuth login is working again; authorization and login complete normally.
+Edit `.env.local` with your credentials, then open <http://localhost:3000>. The default database file is `data/ldc-shop.sqlite`.
 
-**GitHub login** remains available as a fallback (see `_workers_next/README.md` for GitHub OAuth setup). This notice will be updated if anything changes.
+Common commands:
 
-## ✨ Feature overview
+```bash
+npm run dev       # local development
+npm run build     # production build
+npm run start     # start production server
+npm run lint      # lint the project
+npm run db:push   # synchronize the SQLite schema
+```
 
-The current **Workers edition** includes (full list in [_workers_next/README.md](./_workers_next/README.md)):
+## Docker Deployment
 
-- **Stack**: Next.js 16 (App Router), Tailwind CSS, TypeScript; edge runtime **Cloudflare Workers + D1**.
-- **Linux DO**: OIDC login, EasyPay; optional GitHub login.
-- **Storefront**: Search and categories, dedicated search page, wishlist and voting, announcements, Markdown descriptions, purchase warnings, **product visibility by trust level**, hot and discount, ratings and reviews, stock/sold, shared card keys, purchase limits, quantity selection, custom store name, **product variants (multi-spec)**.
-- **Orders**: Payment callback verification, auto card-key delivery, multi-key display, default recipient email, stock reservation, timeout cancel, order center (with variant labels), pending-order reminder, refund requests and auto-refund, payment QR.
-- **Admin**: Sales stats, low-stock alerts, product management (visibility and variants), categories, card keys, orders, order cleanup, reviews, export/import, announcements, customers, messages, refund settings, nav settings, store and theme (name, description, logo, favicon, colors, font, footer, noindex), check-in settings, update check.
-- **Points**: Daily check-in (configurable on/off and reward), point deduction, full payment with points.
-- **I18n & theme**: English/Chinese, light/dark/system.
-- **Notifications**: Resend delivery email, Telegram and **Bark** for new orders/refunds/user messages, in-app inbox and desktop notifications, contact admin, LDC nav (with store count).
+### Interactive setup
 
-## 🚀 Deployment
+```bash
+git clone https://github.com/chatgptuk/ldc-shop.git
+cd ldc-shop
+chmod +x setup.sh
+./setup.sh
+```
 
-> For detailed steps and env vars, see **[_workers_next/README.md](./_workers_next/README.md)**.
+The script generates `.env` and `docker-compose.yml`, then builds and starts the container.
 
-### ⭐ Recommended: Cloudflare Workers
+### Manual setup
 
-High free tier, fast global access, no cold start.
+```bash
+cp .env.example .env
+mkdir -p data
+chmod 777 data
+docker compose up -d --build
+```
 
-👉 **[Full deployment guide → _workers_next/README.md](./_workers_next/README.md)**
+The container listens on port `3000`. SQLite is persisted at `./data/ldc-shop.sqlite`. For production, place Nginx or Caddy in front of the container and enable HTTPS.
 
-### Alternative: Docker self-hosted
+Rebuild after source changes:
 
-For VPS or your own server; local SQLite, no third-party DB.
+```bash
+docker compose up -d --build
+```
 
-👉 **[Docker guide → _docker/README.md](./_docker/README.md)**
+Stop the service:
 
-### Alternative: Vercel (no longer maintained)
+```bash
+docker compose down
+```
 
-The Vercel edition is no longer maintained; use Workers or Docker for new deployments. For Vercel upstream sync, see `.github/workflows/sync.yml` and enable Actions write permission.
+### Prebuilt image
 
-## 💡 Custom domain
+To use the published image directly:
 
-For the best experience (instant payment status updates), we recommend binding a custom domain (e.g. `store.yourdomain.com`). Shared domains may be blocked by payment gateways or firewalls.
+```bash
+mkdir ldc-shop && cd ldc-shop
+curl -fsSL https://raw.githubusercontent.com/chatgptuk/ldc-shop/main/pull-setup.sh -o setup.sh
+chmod +x setup.sh
+./setup.sh
+```
 
-## ⚙️ Configuration & local development
+## Environment Variables
 
-Environment variables, OIDC/EPay setup, and local dev steps for the Workers edition are in **[_workers_next/README.md](./_workers_next/README.md)**.
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `APP_URL` | Yes | Public site URL |
+| `NEXT_PUBLIC_APP_URL` | Yes | Usually the same as `APP_URL` |
+| `AUTH_TRUST_HOST` | Yes | Set to `true` when using a reverse proxy |
+| `AUTH_SECRET` | Yes | NextAuth session encryption secret |
+| `OAUTH_CLIENT_ID` | Yes | Linux DO Connect Client ID |
+| `OAUTH_CLIENT_SECRET` | Yes | Linux DO Connect Client Secret |
+| `MERCHANT_ID` | Yes | EPay merchant ID |
+| `MERCHANT_KEY` | Yes | EPay merchant key |
+| `PAY_URL` | No | Payment endpoint |
+| `ADMIN_USERS` | Yes | Comma-separated admin usernames |
+| `DATABASE_PATH` | No | SQLite file path |
+| `CRON_INTERNAL_URL` | No | Cleanup endpoint, defaults to `http://127.0.0.1:3000` |
+| `CRON_CLEANUP_TOKEN` | No | Cleanup endpoint token; defaults to the OAuth secret |
+| `GITHUB_ID` | No | GitHub OAuth Client ID |
+| `GITHUB_SECRET` | No | GitHub OAuth Client Secret |
 
-## 📄 License
+Telegram, Bark, and email notifications can be configured in the admin panel.
+
+## Backups
+
+Back up the `data/` directory:
+
+```bash
+cp -r data data-backup-$(date +%Y%m%d)
+```
+
+Stop the container and back up the database before upgrades or migrations.
+
+## License
 
 MIT
