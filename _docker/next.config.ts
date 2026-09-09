@@ -6,6 +6,13 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.resolve(__dirname),
   // Keep the runtime behavior consistent with the current application source.
   cacheComponents: false,
+  experimental: {
+    // Cloudflare/D1 exports can be several megabytes. The default Server
+    // Action request limit is too small for importing a normal shop backup.
+    serverActions: {
+      bodySizeLimit: '16mb',
+    },
+  },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '**' },

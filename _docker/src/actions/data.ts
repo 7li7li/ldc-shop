@@ -7,13 +7,139 @@ import { checkAdmin } from "@/actions/admin"
 import { recalcProductAggregatesForMany } from "@/lib/db/queries"
 import { products } from "@/lib/db/schema"
 
-async function executeStatement(statement: string) {
+const MAX_IMPORT_BYTES = 16 * 1024 * 1024
+
+const importTableMap: Record<string, string> = {
+    daily_checkins: 'daily_checkins_v2',
+}
+
+const importTables = new Set([
+    'products',
+    'cards',
+    'orders',
+    'login_users',
+    'daily_checkins_v2',
+    'settings',
+    'categories',
+    'reviews',
+    'review_replies',
+    'refund_requests',
+    'user_notifications',
+    'admin_messages',
+    'user_messages',
+    'broadcast_messages',
+    'broadcast_reads',
+    'wishlist_items',
+    'wishlist_votes',
+])
+
+// Cloudflare and SQLite exports may contain literal line breaks and semicolons
+// in quoted card keys, descriptions, or notes. Splitting on `\n` or `;` would
+// turn one INSERT into invalid fragments, so only terminate a statement when
+// the semicolon is outside quoted strings and comments.
+function splitSqlStatements(source: string): string[] {
+    const statements: string[] = []
+    let statementStart = 0
+    let quote: "'" | '"' | '`' | null = null
+    let lineComment = false
+    let blockComment = false
+
+    for (let index = 0; index < source.length; index++) {
+        const char = source[index]
+        const next = source[index + 1]
+
+        if (lineComment) {
+            if (char === '\n') lineComment = false
+            continue
+        }
+
+        if (blockComment) {
+            if (char === '*' && next === '/') {
+                blockComment = false
+                index++
+            }
+            continue
+        }
+
+        if (quote) {
+            if (char === quote) {
+                // SQLite escapes quote characters by doubling them.
+                if ((quote === "'" || quote === '"') && next === quote) {
+                    index++
+                    continue
+                }
+                quote = null
+            }
+            continue
+        }
+
+        if (char === '-' && next === '-') {
+            lineComment = true
+            index++
+            continue
+        }
+        if (char === '/' && next === '*') {
+            blockComment = true
+            index++
+            continue
+        }
+        if (char === "'" || char === '"' || char === '`') {
+            quote = char
+            continue
+        }
+        if (char === ';') {
+            statements.push(source.slice(statementStart, index + 1))
+            statementStart = index + 1
+        }
+    }
+
+    const trailingStatement = source.slice(statementStart).trim()
+    if (trailingStatement) statements.push(trailingStatement)
+    return statements
+}
+
+function stripLeadingSqlComments(statement: string) {
+    return statement
+        .replace(/^(?:\s|--[^\r\n]*(?:\r?\n|$)|\/\*[\s\S]*?\*\/)*/u, '')
+        .trim()
+}
+
+function normalizeImportStatement(statement: string, columnMap: Record<string, string>) {
+    const normalized = stripLeadingSqlComments(statement)
+    if (!normalized || !/^INSERT\b/i.test(normalized)) return null
+
+    const match = normalized.match(
+        /^INSERT\s+(?:OR\s+IGNORE\s+)?INTO\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]+)\)\s*VALUES\s*\(([\s\S]*)\)\s*;?\s*$/i
+    )
+    if (!match) return { error: 'Unsupported INSERT syntax' }
+
+    const sourceTable = match[1].toLowerCase()
+    const targetTable = importTableMap[sourceTable] || sourceTable
+    if (!importTables.has(targetTable)) {
+        return { error: `Unsupported import table: ${sourceTable}` }
+    }
+
+    const columns = match[2].split(',').map(column => column.trim())
+    if (!columns.length || !columns.every(column => /^[A-Za-z_][A-Za-z0-9_]*$/.test(column))) {
+        return { error: `Invalid column list for table: ${sourceTable}` }
+    }
+
+    const targetColumns = columns.map(column => columnMap[column] || column)
+    return {
+        statement: `INSERT OR IGNORE INTO ${targetTable} (${targetColumns.join(', ')}) VALUES (${match[3]});`,
+        table: targetTable,
+    }
+}
+
+async function executeStatement(statement: string, table: string) {
     if (!statement.trim()) return
     try {
         await db.run(sql.raw(statement))
-    } catch (e) {
-        console.error('Import Error:', e)
-        throw new Error(`Failed to execute statement: ${statement.substring(0, 50)}... ${e instanceof Error ? e.message : String(e)}`)
+    } catch {
+        // Do not log raw import statements: card keys and private customer
+        // data may be present in an otherwise harmless SQLite error.
+        console.error(`Import failed for table: ${table}`)
+        throw new Error(`Failed to import data into ${table}`)
     }
 }
 
@@ -73,10 +199,12 @@ export async function importData(formData: FormData) {
     if (!file) {
         return { success: false, error: 'No file provided' }
     }
+    if (file.size > MAX_IMPORT_BYTES) {
+        return { success: false, error: 'Import file is too large (maximum 16 MB)' }
+    }
 
     try {
         const text = await file.text()
-        const lines = text.split('\n')
 
         // Comprehensive Column Mapping (CamelCase -> snake_case) for Vercel exports
         // This covers known differences between Vercel export (which uses property names) and D1 schema
@@ -145,53 +273,21 @@ export async function importData(formData: FormData) {
         let successCount = 0
         let errorCount = 0
 
-        for (const line of lines) {
-            const trimmed = line.trim()
-            if (!trimmed || trimmed.startsWith('--')) continue
+        for (const rawStatement of splitSqlStatements(text)) {
+            const importStatement = normalizeImportStatement(rawStatement, columnMap)
+            if (!importStatement) continue
 
-            // Regex to parse INSERT OR IGNORE INTO <table> (...) VALUES (...)
-            const match = trimmed.match(/INSERT OR IGNORE INTO\s+(\w+)\s*\(([^)]+)\)\s*VALUES\s*\((.+)\);/i)
+            if ('error' in importStatement) {
+                console.warn(`[data import] ${importStatement.error}`)
+                errorCount++
+                continue
+            }
 
-            if (match) {
-                const table = match[1]
-                const columnsStr = match[2]
-                const valuesStr = match[3]
-
-                const columns = columnsStr.split(',').map(c => c.trim())
-
-                // Map table name
-                const tableMap: Record<string, string> = {
-                    'daily_checkins': 'daily_checkins_v2'
-                }
-                const targetTable = tableMap[table] || table
-
-                // Map columns
-                const newColumns = columns.map(c => columnMap[c] || c)
-
-                // Reconstruct statement
-                const newStatement = `INSERT OR IGNORE INTO ${targetTable} (${newColumns.join(', ')}) VALUES (${valuesStr});`
-
-                try {
-                    await executeStatement(newStatement)
-                    successCount++
-                } catch (e: any) {
-                    const errorMsg = e?.message || String(e)
-                    // Silently skip if table doesn't exist (Vercel export might have tables that Workers doesn't have)
-                    if (errorMsg.includes('no such table') || errorMsg.includes('does not exist')) {
-                        // Skip silently - this is expected for some tables
-                    } else {
-                        console.error('Failed statement:', newStatement, errorMsg)
-                    }
-                    errorCount++
-                }
-            } else if (trimmed.toUpperCase().startsWith('INSERT')) {
-                // Try executing other INSERTs directly if they match simple format
-                try {
-                    await executeStatement(trimmed)
-                    successCount++
-                } catch (e) {
-                    errorCount++
-                }
+            try {
+                await executeStatement(importStatement.statement, importStatement.table)
+                successCount++
+            } catch {
+                errorCount++
             }
         }
 
