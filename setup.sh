@@ -146,6 +146,9 @@ if [ "$DB_TYPE" = "mysql" ]; then
         echo -e "${RED}使用 MySQL 时连接地址不能为空${NC}"
         prompt DATABASE_URL "MySQL 连接地址（mysql://用户:密码@主机:3306/数据库）" "" true
     done
+    DATABASE_CONFIG="DATABASE_URL=${DATABASE_URL}"
+else
+    DATABASE_CONFIG="DATABASE_PATH=/app/data/ldc-shop.sqlite"
 fi
 
 echo ""
@@ -230,8 +233,7 @@ ADMIN_USERS=${ADMIN_USERS}
 
 # 数据库
 DB_TYPE=${DB_TYPE}
-DATABASE_PATH=/app/data/ldc-shop.sqlite
-DATABASE_URL=${DATABASE_URL}
+${DATABASE_CONFIG}
 
 # GitHub OAuth 登录（可选）
 GITHUB_ID=${GITHUB_ID}
@@ -243,6 +245,7 @@ EOF
 echo -e "${GREEN}✓${NC} .env 文件已生成"
 
 # Write docker-compose.yml
+if [ "$DB_TYPE" = "mysql" ]; then
 cat > "$COMPOSE_FILE" <<EOF
 services:
   app:
@@ -250,22 +253,42 @@ services:
     build: .
     restart: always
     ports:
-      - "${PORT}:3000"
+      - "127.0.0.1:${PORT}:3000"
+    env_file:
+      - .env
+
+    # 使用 1Panel MySQL 时取消以下注释：
+    # networks:
+    #   - onepanel
+
+# networks:
+#   onepanel:
+#     external: true
+#     name: 1panel-network
+EOF
+else
+cat > "$COMPOSE_FILE" <<EOF
+services:
+  app:
+    container_name: ldc-shop
+    build: .
+    restart: always
+    ports:
+      - "127.0.0.1:${PORT}:3000"
     volumes:
       - ./data:/app/data
     env_file:
       - .env
-    environment:
-      DB_TYPE: \${DB_TYPE:-sqlite}
-      DATABASE_PATH: /app/data/ldc-shop.sqlite
-      DATABASE_URL: \${DATABASE_URL:-}
 EOF
+fi
 
 echo -e "${GREEN}✓${NC} docker-compose.yml 已生成"
 
-# Create data directory with open permissions for container
-mkdir -p data && chmod 777 data
-echo -e "${GREEN}✓${NC} data 目录已创建"
+# SQLite needs a persistent writable data directory; MySQL stores no data here.
+if [ "$DB_TYPE" = "sqlite" ]; then
+    mkdir -p data && chmod 777 data
+    echo -e "${GREEN}✓${NC} data 目录已创建"
+fi
 
 echo ""
 echo -e "${CYAN}━━━ 配置摘要 ━━━${NC}"

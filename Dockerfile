@@ -67,6 +67,4 @@ ENV HOSTNAME="0.0.0.0"
 ENV DATABASE_PATH="/app/data/ldc-shop.sqlite"
 ENV DB_TYPE="sqlite"
 
-VOLUME ["/app/data"]
-
 ENTRYPOINT ["./entrypoint.sh"]

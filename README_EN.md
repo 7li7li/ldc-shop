@@ -47,27 +47,40 @@ chmod +x setup.sh
 ./setup.sh
 ```
 
-The script generates `.env` and `docker-compose.yml`, then builds and starts the container.
+The script interactively selects SQLite or MySQL, generates the matching `.env` and `docker-compose.yml`, then builds and starts the container. SQLite creates a data directory; MySQL does not.
 
 ### Manual setup
 
+Choose the matching template for your database. SQLite mounts the data directory; MySQL does not.
+
+SQLite:
+
 ```bash
-cp .env.example .env
+cp .env.sqlite.example .env
+cp docker-compose.sqlite.yml docker-compose.yml
 mkdir -p data
 chmod 777 data
 docker compose up -d --build
 ```
 
-The container listens on port `3000`. SQLite is persisted at `./data/ldc-shop.sqlite` by default. For production, place Nginx or Caddy in front of the container and enable HTTPS.
+MySQL:
 
-To use MySQL, set the following values in `.env`:
+```bash
+cp .env.mysql.example .env
+cp docker-compose.mysql.yml docker-compose.yml
+docker compose up -d --build
+```
+
+The container port is bound only to `127.0.0.1:3000` on the host. SQLite is persisted at `./data/ldc-shop.sqlite` by default. Use Nginx or Caddy as an HTTPS reverse proxy for external access.
+
+For MySQL, set the external database connection in `.env`:
 
 ```env
 DB_TYPE=mysql
-DATABASE_URL=mysql://ldc_shop:change_me@192.168.1.100:3306/ldc_shop
+DATABASE_URL=mysql://ldc_shop:change_me@mysql-host:3306/ldc_shop
 ```
 
-Docker Compose does not bundle a MySQL service. Provide a separate MySQL 8 instance and make sure its host is reachable from the application container. Then start the application normally:
+Docker Compose does not bundle a MySQL service. Provide a separate MySQL 8 instance and make sure its host is reachable from the application container. If MySQL is managed by 1Panel, uncomment the 1panel-network lines in docker-compose.mysql.yml and use the MySQL container name on that network as the host in DATABASE_URL.
 
 ```bash
 docker compose up -d --build

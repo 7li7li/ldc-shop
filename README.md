@@ -53,29 +53,40 @@ chmod +x setup.sh
 ./setup.sh
 ```
 
-脚本会交互式生成 `.env` 和 `docker-compose.yml`，并构建、启动容器。
+脚本会交互式选择 SQLite 或 MySQL，生成对应的 `.env` 和 `docker-compose.yml`，并构建、启动容器。SQLite 会创建 data 目录；MySQL 不会。
 
 ### 手动部署
 
-复制并编辑环境变量文件：
+根据数据库类型选择对应模板。SQLite 需要挂载 data 目录，MySQL 不挂载该目录。
+
+SQLite：
 
 ```bash
-cp .env.example .env
+cp .env.sqlite.example .env
+cp docker-compose.sqlite.yml docker-compose.yml
 mkdir -p data
 chmod 777 data
 docker compose up -d --build
 ```
 
-容器监听 `3000` 端口，默认 SQLite 数据保存在 `./data/ldc-shop.sqlite`。生产环境建议使用 Nginx 或 Caddy 配置 HTTPS 反向代理。
+MySQL：
 
-如需使用 MySQL，在 `.env` 中设置：
+```bash
+cp .env.mysql.example .env
+cp docker-compose.mysql.yml docker-compose.yml
+docker compose up -d --build
+```
+
+容器端口仅映射到宿主机 `127.0.0.1:3000`，默认 SQLite 数据保存在 `./data/ldc-shop.sqlite`。外部访问需要使用 Nginx 或 Caddy 配置 HTTPS 反向代理。
+
+MySQL 的 `.env` 中设置外部数据库连接：
 
 ```env
 DB_TYPE=mysql
-DATABASE_URL=mysql://ldc_shop:change_me@192.168.1.100:3306/ldc_shop
+DATABASE_URL=mysql://ldc_shop:change_me@mysql-host:3306/ldc_shop
 ```
 
-Docker Compose 不内置 MySQL 服务；请自行准备 MySQL 8 实例，并确保应用容器可以访问连接地址中的主机。配置完成后照常使用 `docker compose up -d --build` 启动应用。
+Docker Compose 不内置 MySQL 服务；请自行准备 MySQL 8 实例，并确保应用容器可以访问连接地址中的主机。若 MySQL 由 1Panel 管理，请在 docker-compose.mysql.yml 中取消 1panel-network 相关注释，并将连接地址中的主机改为 MySQL 容器在该网络中的名称。
 
 更新源码后重新构建：
 
