@@ -1,6 +1,6 @@
 "use server"
 
-import { db } from "@/lib/db"
+import { db, isMySql } from "@/lib/db"
 import { adminMessages, loginUsers, userNotifications, broadcastMessages, broadcastReads } from "@/lib/db/schema"
 import { eq, sql } from "drizzle-orm"
 import { checkAdmin } from "@/actions/admin"
@@ -9,6 +9,7 @@ import { revalidatePath } from "next/cache"
 type TargetType = "all" | "username" | "userId"
 
 async function ensureAdminMessagesTable() {
+    if (isMySql) return
     await db.run(sql`
         CREATE TABLE IF NOT EXISTS admin_messages(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -23,6 +24,7 @@ async function ensureAdminMessagesTable() {
 }
 
 async function ensureBroadcastTables() {
+    if (isMySql) return
     await db.run(sql`
         CREATE TABLE IF NOT EXISTS broadcast_messages(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,6 +45,7 @@ async function ensureBroadcastTables() {
 }
 
 async function ensureUserNotificationsTable() {
+    if (isMySql) return
     await db.run(sql`
         CREATE TABLE IF NOT EXISTS user_notifications(
             id INTEGER PRIMARY KEY AUTOINCREMENT,

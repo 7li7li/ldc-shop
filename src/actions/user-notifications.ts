@@ -3,7 +3,7 @@
 import { auth } from "@/lib/auth"
 import { clearUserNotifications, getSetting, getUserNotifications, getUserUnreadNotificationCount, markAllUserNotificationsRead, markUserNotificationRead, setSetting } from "@/lib/db/queries"
 import { broadcastMessages, broadcastReads } from "@/lib/db/schema"
-import { db } from "@/lib/db"
+import { db, insertOrIgnore, isMySql } from "@/lib/db"
 import { and, desc, eq, gte, sql } from "drizzle-orm"
 
 const BROADCAST_LIMIT = 10
@@ -11,6 +11,7 @@ const BROADCAST_LIMIT = 10
 const broadcastClearKey = (userId: string) => `broadcast_cleared_at:${userId}`
 
 async function ensureBroadcastTables() {
+    if (isMySql) return
     await db.run(sql`
         CREATE TABLE IF NOT EXISTS broadcast_messages(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,15 +62,10 @@ export async function markAllNotificationsRead() {
     try {
         await ensureBroadcastTables()
         const now = Date.now()
-        await db.run(sql`
-            INSERT OR IGNORE INTO broadcast_reads (message_id, user_id, created_at)
-            SELECT m.id, ${userId}, ${now}
-            FROM broadcast_messages m
-            WHERE NOT EXISTS (
-                SELECT 1 FROM broadcast_reads r
-                WHERE r.message_id = m.id AND r.user_id = ${userId}
-            )
-        `)
+        const broadcasts = await db.select({ id: broadcastMessages.id }).from(broadcastMessages)
+        for (const broadcast of broadcasts) {
+            await insertOrIgnore(broadcastReads, { messageId: broadcast.id, userId, createdAt: new Date(now) })
+        }
     } catch {
         // ignore
     }
@@ -212,10 +208,7 @@ export async function markNotificationRead(id: number) {
                 .limit(1)
             if (exists.length > 0) {
                 const now = Date.now()
-                await db.run(sql`
-                    INSERT OR IGNORE INTO broadcast_reads (message_id, user_id, created_at)
-                    VALUES (${messageId}, ${userId}, ${now})
-                `)
+                await insertOrIgnore(broadcastReads, { messageId, userId, createdAt: new Date(now) })
             }
         }
     } catch {
@@ -236,11 +229,10 @@ export async function clearMyNotifications() {
     try {
         await ensureBroadcastTables()
         const now = Date.now()
-        await db.run(sql`
-            INSERT OR IGNORE INTO broadcast_reads (message_id, user_id, created_at)
-            SELECT m.id, ${userId}, ${now}
-            FROM broadcast_messages m
-        `)
+        const broadcasts = await db.select({ id: broadcastMessages.id }).from(broadcastMessages)
+        for (const broadcast of broadcasts) {
+            await insertOrIgnore(broadcastReads, { messageId: broadcast.id, userId, createdAt: new Date(now) })
+        }
     } catch {
         // ignore
     }

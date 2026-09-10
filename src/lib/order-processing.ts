@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, randomOrder, upsert } from "@/lib/db";
 import { orders, cards, products, loginUsers as users } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { isPaymentOrder, isPointsTopupOrder } from "@/lib/payment";
@@ -139,17 +139,12 @@ export async function processOrderFulfillment(orderId: string, paidAmount: numbe
                 throw new Error(`Points top-up order ${orderId} has invalid points`);
             }
 
-            await db.insert(users)
-                .values({
+            await upsert(users, {
                     userId: order.userId,
                     username: order.username || null,
                     email: order.email || null,
                     points
-                })
-                .onConflictDoUpdate({
-                    target: users.userId,
-                    set: { points: sql`${users.points} + ${points}` }
-                });
+                }, users.userId, { points: sql`${users.points} + ${points}` });
 
             await db.update(orders)
                 .set({
@@ -216,7 +211,7 @@ export async function processOrderFulfillment(orderId: string, paidAmount: numbe
             const availableCard = await db.select({ id: cards.id, cardKey: cards.cardKey })
                 .from(cards)
                 .where(sql`${cards.productId} = ${order.productId} AND COALESCE(${cards.isUsed}, 0) = 0`)
-                .orderBy(sql`RANDOM()`)
+                .orderBy(randomOrder())
                 .limit(1);
 
             if (availableCard.length > 0) {

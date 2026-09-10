@@ -10,23 +10,34 @@ if [ -z "${AUTH_URL:-}" ] && [ -n "${APP_URL:-}" ]; then
     echo "AUTH_URL auto-set to $APP_URL"
 fi
 
-# Ensure data directory exists and is writable
-mkdir -p /app/data 2>/dev/null || true
-if [ ! -w /app/data ]; then
-    echo "ERROR: /app/data is not writable; SQLite cannot start."
-    echo "Fix: ensure the host volume directory is writable (chmod 777 ./data)"
-    exit 1
+DATABASE_TYPE=$(printf '%s' "${DB_TYPE:-sqlite}" | tr '[:upper:]' '[:lower:]')
+if [ "$DATABASE_TYPE" = "mysql" ]; then
+    echo "Using MySQL database"
+else
+    # Ensure data directory exists and is writable
+    mkdir -p /app/data 2>/dev/null || true
+    if [ ! -w /app/data ]; then
+        echo "ERROR: /app/data is not writable; SQLite cannot start."
+        echo "Fix: ensure the host volume directory is writable (chmod 777 ./data)"
+        exit 1
+    fi
+    echo "Running SQLite compatibility migrations..."
+    node migrate.mjs
 fi
-
-# Bring databases from the original Docker release forward before Drizzle
-# compares schemas. This keeps existing SQLite data intact during upgrades.
-echo "Running SQLite compatibility migrations..."
-node migrate.mjs
 
 # Apply the current Drizzle schema before serving requests. --force keeps
 # first boot and additive upgrades non-interactive inside Docker.
 echo "Running database migrations..."
-npx drizzle-kit push --force
+attempt=1
+until npx drizzle-kit push --force; do
+    if [ "$attempt" -ge 30 ]; then
+        echo "ERROR: database migration failed after $attempt attempts"
+        exit 1
+    fi
+    attempt=$((attempt + 1))
+    echo "Database is not ready; retrying migration in 2 seconds ($attempt/30)..."
+    sleep 2
+done
 
 # Start the cron job in background
 echo "Starting cron scheduler..."

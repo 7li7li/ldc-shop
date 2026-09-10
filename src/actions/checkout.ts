@@ -1,7 +1,7 @@
 'use server'
 
 import { auth } from "@/lib/auth"
-import { db } from "@/lib/db"
+import { db, getAffectedRows, randomOrder } from "@/lib/db"
 import { products, cards, orders, loginUsers } from "@/lib/db/schema"
 import { cancelExpiredOrders, cleanupExpiredCardsIfNeeded, recalcProductAggregates, createUserNotification } from "@/lib/db/queries"
 import { generateOrderId, generateSign } from "@/lib/crypto"
@@ -142,7 +142,7 @@ export async function createOrder(productId: string, quantity: number = 1, email
                     or(isNull(cards.isUsed), eq(cards.isUsed, false))
                 ));
             // If we have at least 1 card, treat as infinite stock
-            return (result[0]?.count || 0) > 0 ? INFINITE_STOCK : 0;
+            return Number(result[0]?.count || 0) > 0 ? INFINITE_STOCK : 0;
         }
 
         // SQLite count returns number directly usually
@@ -153,7 +153,7 @@ export async function createOrder(productId: string, quantity: number = 1, email
                 or(isNull(cards.isUsed), eq(cards.isUsed, false)),
                 or(isNull(cards.reservedAt), lt(cards.reservedAt, new Date(Date.now() - RESERVATION_TTL_MS)))
             ))
-        return result[0]?.count || 0
+        return Number(result[0]?.count || 0)
     }
 
     const runStockCleanupFallback = async () => {
@@ -194,7 +194,8 @@ export async function createOrder(productId: string, quantity: number = 1, email
                         or(eq(orders.status, 'paid'), eq(orders.status, 'delivered'))
                     ))
 
-                const existingCount = countResult[0]?.totalQuantity || 0
+                // MySQL may return SUM aggregates as strings.
+                const existingCount = Number(countResult[0]?.totalQuantity || 0)
                 if (existingCount + quantity > product.purchaseLimit) {
                     return { success: false, error: 'buy.limitExceeded' }
                 }
@@ -229,7 +230,7 @@ export async function createOrder(productId: string, quantity: number = 1, email
                     or(isNull(cards.isUsed), eq(cards.isUsed, false)),
                     or(isNull(cards.expiresAt), gt(cards.expiresAt, new Date(nowMs)))
                 ))
-                .orderBy(sql`RANDOM()`)
+                .orderBy(randomOrder())
                 .limit(1);
 
             if (availableCard.length > 0) {
@@ -252,29 +253,33 @@ export async function createOrder(productId: string, quantity: number = 1, email
                 while (attempts < maxAttempts && !success) {
                     attempts++
 
-                    // A. Try strictly free card (single atomic UPDATE ... RETURNING)
+                    // Select a candidate, then claim it with the same guard.
+                    // Only one concurrent request can observe an affected row.
                     const nowMs = Date.now();
-                    const claimedRows: any[] = await db.all(sql`
-                        UPDATE cards
-                        SET reserved_order_id = ${orderId}, reserved_at = ${nowMs}
-                        WHERE id = (
-                            SELECT id FROM cards
-                            WHERE product_id = ${productId}
-                              AND (is_used = 0 OR is_used IS NULL)
-                              AND reserved_at IS NULL
-                              AND (expires_at IS NULL OR expires_at > ${nowMs})
-                            LIMIT 1
-                        )
-                        RETURNING id, card_key
-                    `);
-
-                    if (claimedRows.length > 0) {
-                        const row = claimedRows[0];
-                        const id = Number(row.id);
-                        const key = row.card_key ?? row.cardKey;
-                        reservedCards.push({ id, key });
-                        success = true;
-                        continue;
+                    const freeCandidates = await db.select({ id: cards.id, cardKey: cards.cardKey })
+                        .from(cards)
+                        .where(and(
+                            eq(cards.productId, productId),
+                            or(isNull(cards.isUsed), eq(cards.isUsed, false)),
+                            isNull(cards.reservedAt),
+                            or(isNull(cards.expiresAt), gt(cards.expiresAt, new Date(nowMs)))
+                        ))
+                        .limit(1)
+                    if (freeCandidates.length > 0) {
+                        const candidate = freeCandidates[0]
+                        const claimResult = await db.update(cards)
+                            .set({ reservedOrderId: orderId, reservedAt: new Date(nowMs) })
+                            .where(and(
+                                eq(cards.id, candidate.id),
+                                or(isNull(cards.isUsed), eq(cards.isUsed, false)),
+                                isNull(cards.reservedAt),
+                                or(isNull(cards.expiresAt), gt(cards.expiresAt, new Date(nowMs)))
+                            ))
+                        if (getAffectedRows(claimResult) > 0) {
+                            reservedCards.push({ id: candidate.id, key: candidate.cardKey })
+                            success = true
+                            continue
+                        }
                     }
 
                     // B. Fallback: Expired reservation
@@ -335,10 +340,9 @@ export async function createOrder(productId: string, quantity: number = 1, email
                                     ? eq(cards.reservedOrderId, candidateOrderId)
                                     : isNull(cards.reservedOrderId)
                             ))
-                            .returning({ id: cards.id, cardKey: cards.cardKey });
 
-                        if (updated.length > 0) {
-                            reservedCards.push({ id: updated[0].id, key: updated[0].cardKey });
+                        if (getAffectedRows(updated) > 0) {
+                            reservedCards.push({ id: candidateCardId, key: candidate.cardKey });
                             success = true;
                         }
                     }
@@ -364,10 +368,9 @@ export async function createOrder(productId: string, quantity: number = 1, email
             if (pointsToUse > 0) {
                 const updatedUser = await db.update(loginUsers)
                     .set({ points: sql`${loginUsers.points} - ${pointsToUse}` })
-                    .where(and(eq(loginUsers.userId, user!.id!), sql`${loginUsers.points} >= ${pointsToUse}`))
-                    .returning({ points: loginUsers.points });
+                    .where(and(eq(loginUsers.userId, user!.id!), sql`${loginUsers.points} >= ${pointsToUse}`));
 
-                if (!updatedUser.length) {
+                if (getAffectedRows(updatedUser) < 1) {
                     throw new Error('insufficient_points');
                 }
 

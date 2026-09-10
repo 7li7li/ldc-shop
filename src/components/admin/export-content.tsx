@@ -92,9 +92,14 @@ export function AdminDataContent({ shopName }: { shopName: string | null }) {
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-sm text-muted-foreground">{t('admin.export.fullDumpHint')}</p>
-                <Button asChild>
-                  <a href={downloadUrl({ type: "full", format: "sql" })}>{t('admin.export.sqliteSql')}</a>
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild>
+                    <a href={downloadUrl({ type: "full", format: "json" })}>{t('admin.export.migrationJson')}</a>
+                  </Button>
+                  <Button variant="outline" asChild>
+                    <a href={downloadUrl({ type: "full", format: "sql" })}>{t('admin.export.sqliteSql')}</a>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -124,8 +129,8 @@ export function AdminDataContent({ shopName }: { shopName: string | null }) {
 
                 <form onSubmit={handleImport} className="grid w-full max-w-sm items-center gap-1.5 space-y-4">
                   <div className="grid w-full max-w-sm items-center gap-1.5">
-                    <Label htmlFor="sql-file">{t('admin.export.selectFile')}</Label>
-                    <Input id="sql-file" name="file" type="file" accept=".sql,.txt" required />
+                    <Label htmlFor="backup-file">{t('admin.export.selectFile')}</Label>
+                    <Input id="backup-file" name="file" type="file" accept=".json,.sql,.txt,application/json,text/plain" required />
                   </div>
                   <Button type="submit" disabled={importing}>
                     {importing ? (

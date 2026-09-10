@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
-import { db } from "@/lib/db"
+import { databaseType, db } from "@/lib/db"
 import {
   orders,
   reviews,
@@ -32,7 +32,7 @@ function requireAdminUsername(username?: string | null) {
 
 function isMissingTable(error: any) {
   const errorString = (JSON.stringify(error) + String(error) + (error?.message || '')).toLowerCase()
-  return errorString.includes("no such table")
+  return errorString.includes("no such table") || errorString.includes("doesn't exist") || errorString.includes("er_no_such_table")
 }
 
 function csvEscape(value: any): string {
@@ -68,9 +68,8 @@ function formatSqlValue(val: any): string {
   if (val === null || val === undefined) return "NULL"
   if (typeof val === "boolean") return val ? "1" : "0"
   if (val instanceof Date) {
-    // Check if valid date
     if (isNaN(val.getTime())) return "NULL"
-    return "'" + val.toISOString().replace("T", " ").replace("Z", "") + "'"
+    return String(val.getTime())
   }
   if (typeof val === "number") return String(val)
   if (typeof val === "string") return escapeString(val)
@@ -267,23 +266,23 @@ export async function GET(req: Request) {
     if (type === "full") {
       const full: Record<string, any[]> = {}
       const tables: Array<[string, () => Promise<any[]>]> = [
-        ["categories", () => db.select().from(categories).all()],
-        ["products", () => db.select().from(products).all()],
-        ["cards", () => db.select().from(cards).all()],
-        ["orders", () => db.select().from(orders).all()],
-        ["reviews", () => db.select().from(reviews).all()],
-        ["review_replies", () => db.select().from(reviewReplies).all()],
-        ["settings", () => db.select().from(settings).all()],
-        ["login_users", () => db.select().from(loginUsers).all()],
-        ["user_notifications", () => db.select().from(userNotifications).all()],
-        ["user_messages", () => db.select().from(userMessages).all()],
-        ["admin_messages", () => db.select().from(adminMessages).all()],
-        ["broadcast_messages", () => db.select().from(broadcastMessages).all()],
-        ["broadcast_reads", () => db.select().from(broadcastReads).all()],
-        ["wishlist_items", () => db.select().from(wishlistItems).all()],
-        ["wishlist_votes", () => db.select().from(wishlistVotes).all()],
-        ["refund_requests", () => db.select().from(refundRequests).all()],
-        ["daily_checkins_v2", () => db.select().from(dailyCheckins).all()],
+        ["categories", async () => await db.select().from(categories)],
+        ["products", async () => await db.select().from(products)],
+        ["cards", async () => await db.select().from(cards)],
+        ["orders", async () => await db.select().from(orders)],
+        ["reviews", async () => await db.select().from(reviews)],
+        ["review_replies", async () => await db.select().from(reviewReplies)],
+        ["settings", async () => await db.select().from(settings)],
+        ["login_users", async () => await db.select().from(loginUsers)],
+        ["user_notifications", async () => await db.select().from(userNotifications)],
+        ["user_messages", async () => await db.select().from(userMessages)],
+        ["admin_messages", async () => await db.select().from(adminMessages)],
+        ["broadcast_messages", async () => await db.select().from(broadcastMessages)],
+        ["broadcast_reads", async () => await db.select().from(broadcastReads)],
+        ["wishlist_items", async () => await db.select().from(wishlistItems)],
+        ["wishlist_votes", async () => await db.select().from(wishlistVotes)],
+        ["refund_requests", async () => await db.select().from(refundRequests)],
+        ["daily_checkins_v2", async () => await db.select().from(dailyCheckins)],
       ]
 
       for (const [tableName, fetcher] of tables) {
@@ -296,9 +295,15 @@ export async function GET(req: Request) {
       }
 
       if (format === "json") {
-        return NextResponse.json(full, {
+        return NextResponse.json({
+          format: "ldc-shop-backup",
+          version: 1,
+          sourceDatabase: databaseType,
+          generatedAt: new Date().toISOString(),
+          tables: full,
+        }, {
           headers: {
-            "Content-Disposition": `attachment; filename="full-dump.json"`,
+            "Content-Disposition": `attachment; filename="ldc-shop-migration.json"`,
           },
         })
       }

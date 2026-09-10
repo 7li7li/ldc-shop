@@ -1,11 +1,11 @@
 # LDC Shop
 
-Virtual goods shop built with **Next.js 16**, **SQLite**, and **Shadcn UI**. The project supports local development and Docker self-hosting.
+Virtual goods shop built with **Next.js 16**, **SQLite/MySQL**, and **Shadcn UI**. The project supports local development and Docker self-hosting.
 
 ## Stack
 
 - **Framework**: Next.js 16 App Router + TypeScript
-- **Database**: SQLite (`better-sqlite3`)
+- **Database**: SQLite (`better-sqlite3`) or MySQL 8 (`mysql2`)
 - **ORM**: Drizzle ORM
 - **Authentication**: Linux DO Connect, with optional GitHub OAuth
 - **Payments**: EPay
@@ -33,7 +33,7 @@ npm run dev       # local development
 npm run build     # production build
 npm run start     # start production server
 npm run lint      # lint the project
-npm run db:push   # synchronize the SQLite schema
+npm run db:push   # synchronize the selected database schema
 ```
 
 ## Docker Deployment
@@ -58,7 +58,20 @@ chmod 777 data
 docker compose up -d --build
 ```
 
-The container listens on port `3000`. SQLite is persisted at `./data/ldc-shop.sqlite`. For production, place Nginx or Caddy in front of the container and enable HTTPS.
+The container listens on port `3000`. SQLite is persisted at `./data/ldc-shop.sqlite` by default. For production, place Nginx or Caddy in front of the container and enable HTTPS.
+
+To use MySQL, set the following values in `.env`:
+
+```env
+DB_TYPE=mysql
+DATABASE_URL=mysql://ldc_shop:change_me@192.168.1.100:3306/ldc_shop
+```
+
+Docker Compose does not bundle a MySQL service. Provide a separate MySQL 8 instance and make sure its host is reachable from the application container. Then start the application normally:
+
+```bash
+docker compose up -d --build
+```
 
 Rebuild after source changes:
 
@@ -98,6 +111,8 @@ chmod +x setup.sh
 | `PAY_URL` | No | Payment endpoint |
 | `ADMIN_USERS` | Yes | Comma-separated admin usernames |
 | `DATABASE_PATH` | No | SQLite file path |
+| `DB_TYPE` | No | `sqlite` (default) or `mysql` |
+| `DATABASE_URL` | MySQL only | MySQL connection URL |
 | `CRON_INTERNAL_URL` | No | Cleanup endpoint, defaults to `http://127.0.0.1:3000` |
 | `CRON_CLEANUP_TOKEN` | No | Cleanup endpoint token; defaults to the OAuth secret |
 | `GITHUB_ID` | No | GitHub OAuth Client ID |
@@ -105,7 +120,7 @@ chmod +x setup.sh
 
 Telegram, Bark, and email notifications can be configured in the admin panel.
 
-## Backups
+## Backups and Migration
 
 Back up the `data/` directory:
 
@@ -114,6 +129,8 @@ cp -r data data-backup-$(date +%Y%m%d)
 ```
 
 Stop the container and back up the database before upgrades or migrations.
+
+The full JSON export from the admin Data Management page is a cross-database migration package. Export it from SQLite, switch the deployment to MySQL, and upload the JSON package on the same page. Legacy SQLite SQL exports are also accepted and converted before being written to MySQL. Stop new order writes while migrating, and keep a copy of the source database until the imported data has been verified.
 
 ## License
 

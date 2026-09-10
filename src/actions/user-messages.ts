@@ -1,6 +1,6 @@
 "use server"
 
-import { db } from "@/lib/db"
+import { db, isMySql } from "@/lib/db"
 import { userMessages, loginUsers } from "@/lib/db/schema"
 import { eq, sql } from "drizzle-orm"
 import { auth } from "@/lib/auth"
@@ -9,6 +9,7 @@ import { revalidatePath } from "next/cache"
 import { notifyAdminUserMessage } from "@/lib/notifications"
 
 async function ensureUserMessagesTable() {
+    if (isMySql) return
     await db.run(sql`
         CREATE TABLE IF NOT EXISTS user_messages(
             id INTEGER PRIMARY KEY AUTOINCREMENT,

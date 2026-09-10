@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth"
 import { queryOrderStatus } from "@/lib/epay"
 import { processOrderFulfillment } from "@/lib/order-processing"
 import { revalidatePath } from "next/cache"
-import { db } from "@/lib/db"
+import { db, getAffectedRows } from "@/lib/db"
 import { orders, cards, loginUsers } from "@/lib/db/schema"
 import { and, eq, sql } from "drizzle-orm"
 import { withOrderColumnFallback, recalcProductAggregates } from "@/lib/db/queries"
@@ -92,11 +92,13 @@ export async function cancelPendingOrder(orderId: string) {
         const cancelled = await db.update(orders)
             .set({ status: 'cancelled' })
             .where(and(eq(orders.orderId, orderId), eq(orders.status, 'pending')))
-            .returning({ userId: orders.userId, pointsUsed: orders.pointsUsed })
 
-        if (!cancelled.length) return { success: false, error: 'order.cannotCancel' }
+        if (getAffectedRows(cancelled) < 1) return { success: false, error: 'order.cannotCancel' }
 
-        const cancelledOrder = cancelled[0]
+        const cancelledOrder = await db.query.orders.findFirst({
+            where: eq(orders.orderId, orderId),
+            columns: { userId: true, pointsUsed: true }
+        })
         if (cancelledOrder.userId && cancelledOrder.pointsUsed && cancelledOrder.pointsUsed > 0) {
             await db.update(loginUsers)
                 .set({ points: sql`${loginUsers.points} + ${cancelledOrder.pointsUsed}` })

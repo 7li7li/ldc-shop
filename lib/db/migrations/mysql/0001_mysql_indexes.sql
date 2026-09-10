@@ -1,0 +1,24 @@
+CREATE INDEX `admin_messages_created_idx` ON `admin_messages` (`created_at`);--> statement-breakpoint
+CREATE INDEX `broadcast_messages_created_idx` ON `broadcast_messages` (`created_at`);--> statement-breakpoint
+CREATE INDEX `broadcast_reads_user_idx` ON `broadcast_reads` (`user_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `cards_product_used_reserved_idx` ON `cards` (`product_id`,`is_used`,`reserved_at`);--> statement-breakpoint
+CREATE INDEX `cards_reserved_order_idx` ON `cards` (`reserved_order_id`);--> statement-breakpoint
+CREATE INDEX `cards_expires_at_idx` ON `cards` (`expires_at`);--> statement-breakpoint
+CREATE INDEX `daily_checkins_user_created_idx` ON `daily_checkins_v2` (`user_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `login_users_last_login_at_idx` ON `login_users` (`last_login_at`);--> statement-breakpoint
+CREATE INDEX `orders_status_paid_at_idx` ON `orders` (`status`,`paid_at`);--> statement-breakpoint
+CREATE INDEX `orders_status_created_at_idx` ON `orders` (`status`,`created_at`);--> statement-breakpoint
+CREATE INDEX `orders_user_status_created_at_idx` ON `orders` (`user_id`,`status`,`created_at`);--> statement-breakpoint
+CREATE INDEX `orders_product_status_idx` ON `orders` (`product_id`,`status`);--> statement-breakpoint
+CREATE INDEX `products_active_sort_idx` ON `products` (`is_active`,`sort_order`,`created_at`);--> statement-breakpoint
+CREATE INDEX `products_stock_count_idx` ON `products` (`stock_count`);--> statement-breakpoint
+CREATE INDEX `products_sold_count_idx` ON `products` (`sold_count`);--> statement-breakpoint
+CREATE INDEX `refund_requests_order_id_idx` ON `refund_requests` (`order_id`);--> statement-breakpoint
+CREATE INDEX `review_replies_review_created_idx` ON `review_replies` (`review_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `reviews_product_created_at_idx` ON `reviews` (`product_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `user_messages_read_created_idx` ON `user_messages` (`is_read`,`created_at`);--> statement-breakpoint
+CREATE INDEX `user_messages_user_created_idx` ON `user_messages` (`user_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `user_notifications_user_created_idx` ON `user_notifications` (`user_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `user_notifications_user_read_idx` ON `user_notifications` (`user_id`,`is_read`,`created_at`);--> statement-breakpoint
+CREATE INDEX `wishlist_items_created_idx` ON `wishlist_items` (`created_at`);--> statement-breakpoint
+CREATE INDEX `wishlist_votes_item_idx` ON `wishlist_votes` (`item_id`,`created_at`);

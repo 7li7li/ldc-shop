@@ -1,7 +1,7 @@
 'use server'
 
 import { auth } from "@/lib/auth"
-import { db, runSqliteScript } from "@/lib/db"
+import { db, insertOrIgnore, isMySql, runSqliteScript, upsert } from "@/lib/db"
 import { products, cards, reviews, reviewReplies, categories } from "@/lib/db/schema"
 import { eq, sql, inArray, and, or, isNull, lte } from "drizzle-orm"
 import { sendBarkMessage, sendTelegramMessage } from "@/lib/notifications"
@@ -105,14 +105,10 @@ export async function saveProduct(formData: FormData) {
         // Auto-create category if it doesn't exist
         if (category) {
             await ensureCategoriesTable()
-            await db.run(sql`
-                INSERT INTO categories (name, updated_at)
-                VALUES (${category}, (unixepoch() * 1000))
-                ON CONFLICT (name) DO NOTHING
-            `)
+            await insertOrIgnore(categories, { name: category, updatedAt: new Date() })
         }
 
-        await db.insert(products).values({
+        await upsert(products, {
             id,
             name,
             description,
@@ -130,9 +126,7 @@ export async function saveProduct(formData: FormData) {
             variantGroupId,
             variantLabel,
             purchaseQuestions
-        }).onConflictDoUpdate({
-            target: products.id,
-            set: {
+        }, products.id, {
                 name,
                 description,
                 price,
@@ -149,7 +143,6 @@ export async function saveProduct(formData: FormData) {
                 variantGroupId,
                 variantLabel,
                 purchaseQuestions
-            }
         })
     }
 
@@ -557,7 +550,7 @@ export async function saveShopName(rawName: string) {
         if (error.message?.includes('does not exist') ||
             error.code === '42P01' ||
             JSON.stringify(error).includes('42P01')) {
-            await db.run(sql`
+            if (!isMySql) await db.run(sql`
                 CREATE TABLE IF NOT EXISTS settings (
                     key TEXT PRIMARY KEY,
                     value TEXT,
@@ -962,6 +955,7 @@ export async function testEmailNotification(to: string) {
 }
 
 async function ensureCategoriesTable() {
+    if (isMySql) return
     await runSqliteScript(`
         CREATE TABLE IF NOT EXISTS categories (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

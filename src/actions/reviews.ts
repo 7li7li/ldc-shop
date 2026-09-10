@@ -2,7 +2,7 @@
 
 import { auth } from '@/lib/auth'
 import { createReview, createReviewReply } from '@/lib/db/queries'
-import { db } from '@/lib/db'
+import { db, isMySql } from '@/lib/db'
 import { orders, reviews } from '@/lib/db/schema'
 import { eq, sql } from 'drizzle-orm'
 import { revalidatePath, updateTag } from 'next/cache'
@@ -56,7 +56,7 @@ export async function submitReview(
         }
 
         // Ensure reviews table exists
-        await db.run(sql`
+        if (!isMySql) await db.run(sql`
             CREATE TABLE IF NOT EXISTS reviews (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 product_id TEXT NOT NULL,
@@ -119,7 +119,7 @@ export async function submitReviewReply(
             return { success: false, error: 'review.replyTooLong' }
         }
 
-        await db.run(sql`
+        if (!isMySql) await db.run(sql`
             CREATE TABLE IF NOT EXISTS review_replies (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 review_id INTEGER NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,

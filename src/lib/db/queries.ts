@@ -1,5 +1,5 @@
-import { db, runSqliteScript } from "./index";
-import { products, cards, orders, settings, reviews, reviewReplies, loginUsers, categories, userNotifications, wishlistItems, wishlistVotes } from "./schema";
+import { db, getAffectedRows, isMySql, runSqliteScript, upsert } from "./index";
+import { products, cards, orders, settings, reviews, reviewReplies, loginUsers, categories, userNotifications, broadcastReads, wishlistItems, wishlistVotes } from "./schema";
 import { INFINITE_STOCK, RESERVATION_TTL_MS } from "@/lib/constants";
 import { eq, sql, desc, and, asc, gte, or, inArray, lte, lt, isNull } from "drizzle-orm";
 import { updateTag, revalidatePath } from "next/cache";
@@ -39,6 +39,7 @@ async function ensureColumnsOnce(key: ColumnEnsureKey, task: () => Promise<void>
 }
 
 async function ensureCardKeyDuplicatesAllowed() {
+    if (isMySql) return;
     try {
         await db.run(sql`DROP INDEX IF EXISTS cards_product_id_card_key_uq;`);
     } catch {
@@ -91,6 +92,7 @@ async function safeAddColumn(table: string, column: string, definition: string) 
 }
 
 async function ensureIndexes() {
+    if (isMySql) return;
     // ... existing index logic unchanged ...
     const indexStatements = [
         `CREATE INDEX IF NOT EXISTS products_active_sort_idx ON products(is_active, sort_order, created_at)`,
@@ -150,6 +152,7 @@ async function ensureIndexes() {
 }
 
 async function ensureReviewRepliesTable() {
+    if (isMySql) return;
     if (reviewRepliesEnsureState.ready) return;
     if (reviewRepliesEnsureState.pending) {
         await reviewRepliesEnsureState.pending;
@@ -185,6 +188,10 @@ async function ensureReviewRepliesTable() {
 // Auto-initialize database on first query
 async function ensureDatabaseInitialized() {
     if (dbInitialized) return;
+    if (isMySql) {
+        dbInitialized = true;
+        return;
+    }
 
     try {
         // OPTIMIZATION: Check schema version first to avoid heavy DDL checks
@@ -443,6 +450,13 @@ async function ensureDatabaseInitialized() {
         CREATE UNIQUE INDEX IF NOT EXISTS wishlist_votes_item_user_uq ON wishlist_votes(item_id, user_id);
     `);
 
+    // The compatibility DDL above intentionally stays close to the legacy
+    // schema. Bring optional columns up to the current schema before running
+    // migrations that select them.
+    await ensureProductsColumns();
+    await ensureOrdersColumns();
+    await ensureCardsColumns();
+    await ensureLoginUsersSchema();
     await migrateTimestampColumnsToMs();
     await migrateMalformedGitHubUserIds();
     await migrateGitHubUsersDedupAndCanonicalize();
@@ -463,6 +477,7 @@ async function ensureDatabaseInitialized() {
 }
 
 async function ensureProductsColumns() {
+    if (isMySql) return;
     await ensureColumnsOnce('products', async () => {
         await safeAddColumn('products', 'compare_at_price', 'TEXT');
         await safeAddColumn('products', 'is_hot', 'INTEGER DEFAULT 0');
@@ -483,6 +498,7 @@ async function ensureProductsColumns() {
 }
 
 async function ensureOrdersColumns() {
+    if (isMySql) return;
     await ensureColumnsOnce('orders', async () => {
         await safeAddColumn('orders', 'points_used', 'INTEGER DEFAULT 0 NOT NULL');
         await safeAddColumn('orders', 'current_payment_id', 'TEXT');
@@ -492,6 +508,7 @@ async function ensureOrdersColumns() {
 }
 
 async function ensureCardsColumns() {
+    if (isMySql) return;
     await ensureColumnsOnce('cards', async () => {
         await safeAddColumn('cards', 'reserved_order_id', 'TEXT');
         await safeAddColumn('cards', 'reserved_at', 'INTEGER');
@@ -500,6 +517,7 @@ async function ensureCardsColumns() {
 }
 
 async function ensureLoginUsersColumns() {
+    if (isMySql) return;
     await ensureColumnsOnce('loginUsers', async () => {
         await safeAddColumn('login_users', 'last_checkin_at', 'INTEGER');
         await safeAddColumn('login_users', 'consecutive_days', 'INTEGER DEFAULT 0');
@@ -508,6 +526,7 @@ async function ensureLoginUsersColumns() {
 }
 
 export async function ensureLoginUsersSchema() {
+    if (isMySql) return;
     if (loginUsersSchemaReady) return;
     await ensureLoginUsersTable();
     await ensureLoginUsersColumns();
@@ -534,14 +553,11 @@ async function isProductAggregatesBackfilled(): Promise<boolean> {
 }
 
 async function markProductAggregatesBackfilled() {
-    await db.insert(settings).values({
+    await upsert(settings, {
         key: 'product_aggregates_backfilled_v2',
         value: '1',
         updatedAt: new Date()
-    }).onConflictDoUpdate({
-        target: settings.key,
-        set: { value: '1', updatedAt: new Date() }
-    });
+    }, settings.key, { value: '1', updatedAt: new Date() });
 }
 
 export async function recalcProductAggregates(productId: string) {
@@ -1037,7 +1053,7 @@ export async function getWishlistItems(userId: string | null, limit = 10) {
                 SUM(CASE WHEN wv.user_id = ${userId} THEN 1 ELSE 0 END) AS voted
             FROM wishlist_items wi
             LEFT JOIN wishlist_votes wv ON wv.item_id = wi.id
-            GROUP BY wi.id
+            GROUP BY wi.id, wi.title, wi.description, wi.username, wi.created_at
             ORDER BY votes DESC, wi.created_at DESC
             LIMIT ${limit}
         `);
@@ -1067,7 +1083,7 @@ export async function getWishlistItems(userId: string | null, limit = 10) {
                         SUM(CASE WHEN wv.user_id = ${userId} THEN 1 ELSE 0 END) AS voted
                     FROM wishlist_items wi
                     LEFT JOIN wishlist_votes wv ON wv.item_id = wi.id
-                    GROUP BY wi.id
+                    GROUP BY wi.id, wi.title, wi.description, wi.username, wi.created_at
                     ORDER BY votes DESC, wi.created_at DESC
                     LIMIT ${limit}
                 `);
@@ -1254,13 +1270,13 @@ export async function getDashboardStats(nowMs: number) {
         const monthStartMs = monthStart.getTime();
         const stats = await db.select({
             totalCount: sql<number>`count(*)`,
-            totalRevenue: sql<number>`COALESCE(sum(CAST(${orders.amount} AS REAL)), 0)`,
+            totalRevenue: sql<number>`COALESCE(sum(CAST(${orders.amount} AS DECIMAL(18, 2))), 0)`,
             todayCount: sql<number>`COALESCE(sum(CASE WHEN ${orders.paidAt} >= ${todayStartMs} THEN 1 ELSE 0 END), 0)`,
-            todayRevenue: sql<number>`COALESCE(sum(CASE WHEN ${orders.paidAt} >= ${todayStartMs} THEN CAST(${orders.amount} AS REAL) ELSE 0 END), 0)`,
+            todayRevenue: sql<number>`COALESCE(sum(CASE WHEN ${orders.paidAt} >= ${todayStartMs} THEN CAST(${orders.amount} AS DECIMAL(18, 2)) ELSE 0 END), 0)`,
             weekCount: sql<number>`COALESCE(sum(CASE WHEN ${orders.paidAt} >= ${weekStartMs} THEN 1 ELSE 0 END), 0)`,
-            weekRevenue: sql<number>`COALESCE(sum(CASE WHEN ${orders.paidAt} >= ${weekStartMs} THEN CAST(${orders.amount} AS REAL) ELSE 0 END), 0)`,
+            weekRevenue: sql<number>`COALESCE(sum(CASE WHEN ${orders.paidAt} >= ${weekStartMs} THEN CAST(${orders.amount} AS DECIMAL(18, 2)) ELSE 0 END), 0)`,
             monthCount: sql<number>`COALESCE(sum(CASE WHEN ${orders.paidAt} >= ${monthStartMs} THEN 1 ELSE 0 END), 0)`,
-            monthRevenue: sql<number>`COALESCE(sum(CASE WHEN ${orders.paidAt} >= ${monthStartMs} THEN CAST(${orders.amount} AS REAL) ELSE 0 END), 0)`,
+            monthRevenue: sql<number>`COALESCE(sum(CASE WHEN ${orders.paidAt} >= ${monthStartMs} THEN CAST(${orders.amount} AS DECIMAL(18, 2)) ELSE 0 END), 0)`,
         })
             .from(orders)
             .where(eq(orders.status, 'delivered'));
@@ -1277,10 +1293,10 @@ export async function getDashboardStats(nowMs: number) {
         };
 
         return {
-            today: { count: row.todayCount || 0, revenue: row.todayRevenue || 0 },
-            week: { count: row.weekCount || 0, revenue: row.weekRevenue || 0 },
-            month: { count: row.monthCount || 0, revenue: row.monthRevenue || 0 },
-            total: { count: row.totalCount || 0, revenue: row.totalRevenue || 0 }
+            today: { count: Number(row.todayCount || 0), revenue: Number(row.todayRevenue || 0) },
+            week: { count: Number(row.weekCount || 0), revenue: Number(row.weekRevenue || 0) },
+            month: { count: Number(row.monthCount || 0), revenue: Number(row.monthRevenue || 0) },
+            total: { count: Number(row.totalCount || 0), revenue: Number(row.totalRevenue || 0) }
         };
     })
 }
@@ -1319,16 +1335,12 @@ export const getAllSettings = cache(async (): Promise<Record<string, string>> =>
 });
 
 export async function setSetting(key: string, value: string): Promise<void> {
-    await db.insert(settings)
-        .values({ key, value, updatedAt: new Date() })
-        .onConflictDoUpdate({
-            target: settings.key,
-            set: { value, updatedAt: new Date() }
-        });
+    await upsert(settings, { key, value, updatedAt: new Date() }, settings.key, { value, updatedAt: new Date() });
 }
 
 // Categories (best-effort; table created on demand)
 async function ensureCategoriesTable() {
+    if (isMySql) return;
     await runSqliteScript(`
         CREATE TABLE IF NOT EXISTS categories(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1640,8 +1652,8 @@ export async function getProductRating(productId: string): Promise<{ average: nu
         .where(eq(reviews.productId, productId));
 
     return {
-        average: result[0]?.avg ?? 0,
-        count: result[0]?.count ?? 0
+        average: Number(result[0]?.avg || 0),
+        count: Number(result[0]?.count || 0)
     };
 }
 
@@ -1661,8 +1673,8 @@ export async function getProductRatings(productIds: string[]): Promise<Map<strin
 
         for (const row of rows) {
             map.set(row.productId, {
-                average: row.avg ?? 0,
-                count: row.count ?? 0
+                average: Number(row.avg || 0),
+                count: Number(row.count || 0)
             });
         }
     } catch (error: any) {
@@ -1680,7 +1692,12 @@ export async function createReview(data: {
     rating: number;
     comment?: string;
 }) {
-    const res = await db.insert(reviews).values({
+    const res = isMySql
+        ? await db.insert(reviews).values({
+            ...data,
+            createdAt: new Date()
+        }).$returningId()
+        : await db.insert(reviews).values({
         ...data,
         createdAt: new Date()
     }).returning();
@@ -1698,10 +1715,11 @@ export async function createReviewReply(data: {
     comment: string;
 }) {
     await ensureReviewRepliesTable()
-    return await db.insert(reviewReplies).values({
+    const query = db.insert(reviewReplies).values({
         ...data,
         createdAt: new Date(),
-    }).returning();
+    })
+    return isMySql ? query.$returningId() : query.returning();
 }
 
 export async function canUserReview(userId: string, productId: string, username?: string): Promise<{ canReview: boolean; orderId?: string }> {
@@ -1765,13 +1783,13 @@ export async function hasUserReviewedOrder(orderId: string): Promise<boolean> {
 function isMissingTable(error: any) {
     const errorString = (JSON.stringify(error) + String(error) + (error?.message || '')).toLowerCase();
     return (
-        errorString.includes('no such table')
+        errorString.includes('no such table') || errorString.includes("doesn't exist") || errorString.includes('er_no_such_table')
     );
 }
 
 function isMissingTableOrColumn(error: any) {
     const errorString = (JSON.stringify(error) + String(error) + (error?.message || '')).toLowerCase();
-    return isMissingTable(error) || errorString.includes('no such column') || errorString.includes('column not found');
+    return isMissingTable(error) || errorString.includes('no such column') || errorString.includes('column not found') || errorString.includes('unknown column') || errorString.includes('er_bad_field_error');
 }
 
 const TIMESTAMP_MS_THRESHOLD = 1_000_000_000_000;
@@ -1815,6 +1833,7 @@ async function migrateTimestampColumnsToMs() {
 }
 
 async function ensureLoginUsersTable() {
+    if (isMySql) return;
     await db.run(sql`
         CREATE TABLE IF NOT EXISTS login_users(
         user_id TEXT PRIMARY KEY,
@@ -1830,6 +1849,7 @@ async function ensureLoginUsersTable() {
 }
 
 async function ensureSettingsTable() {
+    if (isMySql) return;
     await db.run(sql`
         CREATE TABLE IF NOT EXISTS settings(
             key TEXT PRIMARY KEY,
@@ -1840,6 +1860,7 @@ async function ensureSettingsTable() {
 }
 
 async function ensureUserNotificationsTable() {
+    if (isMySql) return;
     await db.run(sql`
         CREATE TABLE IF NOT EXISTS user_notifications(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1855,6 +1876,7 @@ async function ensureUserNotificationsTable() {
 }
 
 async function ensureAdminMessagesTable() {
+    if (isMySql) return;
     await db.run(sql`
         CREATE TABLE IF NOT EXISTS admin_messages(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1869,6 +1891,7 @@ async function ensureAdminMessagesTable() {
 }
 
 async function ensureUserMessagesTable() {
+    if (isMySql) return;
     await db.run(sql`
         CREATE TABLE IF NOT EXISTS user_messages(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1883,6 +1906,7 @@ async function ensureUserMessagesTable() {
 }
 
 async function ensureBroadcastTables() {
+    if (isMySql) return;
     await runSqliteScript(`
         CREATE TABLE IF NOT EXISTS broadcast_messages(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1903,6 +1927,7 @@ async function ensureBroadcastTables() {
 }
 
 async function ensureWishlistTables() {
+    if (isMySql) return;
     if (wishlistTablesReady) return;
     await runSqliteScript(`
         CREATE TABLE IF NOT EXISTS wishlist_items(
@@ -2029,27 +2054,50 @@ async function runMigrationQuery(statement: any) {
 async function moveUserReferences(sourceUserId: string, targetUserId: string) {
     if (!sourceUserId || !targetUserId || sourceUserId === targetUserId) return
 
-    await runMigrationQuery(sql`
-        DELETE FROM broadcast_reads
-        WHERE user_id = ${sourceUserId}
-          AND EXISTS (
-            SELECT 1
-            FROM broadcast_reads br
-            WHERE br.message_id = broadcast_reads.message_id
-              AND br.user_id = ${targetUserId}
-          )
-    `)
+    // Remove duplicate references before changing the remaining source IDs.
+    // A self-referencing DELETE subquery is rejected by MySQL, so resolve the
+    // duplicate primary keys first and delete them with a normal IN predicate.
+    try {
+        const sourceReads = await db.select({ id: broadcastReads.id, messageId: broadcastReads.messageId })
+            .from(broadcastReads)
+            .where(eq(broadcastReads.userId, sourceUserId))
+        if (sourceReads.length) {
+            const targetReads = await db.select({ messageId: broadcastReads.messageId })
+                .from(broadcastReads)
+                .where(and(
+                    eq(broadcastReads.userId, targetUserId),
+                    inArray(broadcastReads.messageId, sourceReads.map((row: { messageId: number }) => row.messageId)),
+                ))
+            const targetMessageIds = new Set(targetReads.map((row: { messageId: number }) => row.messageId))
+            const duplicateIds = sourceReads
+                .filter((row: { id: number; messageId: number }) => targetMessageIds.has(row.messageId))
+                .map((row: { id: number }) => row.id)
+            if (duplicateIds.length) await db.delete(broadcastReads).where(inArray(broadcastReads.id, duplicateIds))
+        }
+    } catch (error: any) {
+        if (!isMissingTableOrColumn(error)) throw error
+    }
 
-    await runMigrationQuery(sql`
-        DELETE FROM wishlist_votes
-        WHERE user_id = ${sourceUserId}
-          AND EXISTS (
-            SELECT 1
-            FROM wishlist_votes wv
-            WHERE wv.item_id = wishlist_votes.item_id
-              AND wv.user_id = ${targetUserId}
-          )
-    `)
+    try {
+        const sourceVotes = await db.select({ id: wishlistVotes.id, itemId: wishlistVotes.itemId })
+            .from(wishlistVotes)
+            .where(eq(wishlistVotes.userId, sourceUserId))
+        if (sourceVotes.length) {
+            const targetVotes = await db.select({ itemId: wishlistVotes.itemId })
+                .from(wishlistVotes)
+                .where(and(
+                    eq(wishlistVotes.userId, targetUserId),
+                    inArray(wishlistVotes.itemId, sourceVotes.map((row: { itemId: number }) => row.itemId)),
+                ))
+            const targetItemIds = new Set(targetVotes.map((row: { itemId: number }) => row.itemId))
+            const duplicateIds = sourceVotes
+                .filter((row: { id: number; itemId: number }) => targetItemIds.has(row.itemId))
+                .map((row: { id: number }) => row.id)
+            if (duplicateIds.length) await db.delete(wishlistVotes).where(inArray(wishlistVotes.id, duplicateIds))
+        }
+    } catch (error: any) {
+        if (!isMissingTableOrColumn(error)) throw error
+    }
 
     await runMigrationQuery(sql`UPDATE orders SET user_id = ${targetUserId} WHERE user_id = ${sourceUserId}`)
     await runMigrationQuery(sql`UPDATE reviews SET user_id = ${targetUserId} WHERE user_id = ${sourceUserId}`)
@@ -2128,7 +2176,7 @@ async function migrateMalformedGitHubUserIds() {
             const createdAtMs = toEpochMs(sourceUser.createdAt) || Date.now()
             const lastLoginAtMs = toEpochMs(sourceUser.lastLoginAt) || Date.now()
             await runMigrationQuery(sql`
-                INSERT OR IGNORE INTO login_users (
+                ${sql.raw(isMySql ? 'INSERT IGNORE' : 'INSERT OR IGNORE')} INTO login_users (
                     user_id,
                     username,
                     email,
@@ -2299,17 +2347,15 @@ async function isLoginUsersBackfilled(): Promise<boolean> {
 }
 
 async function markLoginUsersBackfilled() {
-    await db.insert(settings).values({
+    await upsert(settings, {
         key: 'login_users_backfilled',
         value: '1',
         updatedAt: new Date()
-    }).onConflictDoUpdate({
-        target: settings.key,
-        set: { value: '1', updatedAt: new Date() }
-    });
+    }, settings.key, { value: '1', updatedAt: new Date() });
 }
 
 async function backfillLoginUsersFromOrdersAndReviews() {
+    if (isMySql) return;
     const alreadyBackfilled = await isLoginUsersBackfilled();
     if (alreadyBackfilled) return;
 
@@ -2343,16 +2389,13 @@ export async function recordLoginUser(userId: string, username?: string | null, 
     }
 
     try {
-        const result = await db.insert(loginUsers).values({
+        const result = await upsert(loginUsers, {
             userId,
             username: username || null,
             email: email || null,
             lastLoginAt: new Date()
-        }).onConflictDoUpdate({
-            target: loginUsers.userId,
-            set: { username: username || null, lastLoginAt: new Date() }
-        });
-        if ((result as any)?.meta?.changes === 1) {
+        }, loginUsers.userId, { username: username || null, lastLoginAt: new Date() });
+        if (getAffectedRows(result) === 1) {
             try {
                 updateTag('home:visitors');
             } catch {
@@ -2370,16 +2413,13 @@ export async function recordLoginUser(userId: string, username?: string | null, 
         if (isMissingTable(error) || error?.message?.includes('column')) {
             await ensureLoginUsersSchema();
 
-            const result = await db.insert(loginUsers).values({
+            const result = await upsert(loginUsers, {
                 userId,
                 username: username || null,
                 email: email || null,
                 lastLoginAt: new Date()
-            }).onConflictDoUpdate({
-                target: loginUsers.userId,
-                set: { username: username || null, lastLoginAt: new Date() }
-            });
-            if ((result as any)?.meta?.changes === 1) {
+            }, loginUsers.userId, { username: username || null, lastLoginAt: new Date() });
+            if (getAffectedRows(result) === 1) {
                 try {
                     updateTag('home:visitors');
                 } catch {
@@ -2534,7 +2574,7 @@ export async function getVisitorCount(): Promise<number> {
         await backfillLoginUsersFromOrdersAndReviews();
         const result = await db.select({ count: sql<number>`count(*)` })
             .from(loginUsers);
-        return result[0]?.count || 0;
+        return Number(result[0]?.count || 0);
     } catch (error: any) {
         if (isMissingTable(error)) return 0;
         throw error;
@@ -2670,8 +2710,12 @@ export async function getUsers(page = 1, pageSize = 20, q = '') {
         const [items, totalRes] = await Promise.all([itemsPromise, countQuery])
 
         return {
-            items,
-            total: totalRes[0]?.count || 0,
+            items: items.map((item: any) => ({
+                ...item,
+                points: Number(item.points || 0),
+                orderCount: Number(item.orderCount || 0),
+            })),
+            total: Number(totalRes[0]?.count || 0),
             page,
             pageSize
         }
@@ -2693,9 +2737,11 @@ export async function updateUserPoints(userId: string, points: number) {
 export async function toggleUserBlock(userId: string, isBlocked: boolean) {
     await ensureLoginUsersTable();
     // Ensure column exists
-    try {
-        await db.run(sql.raw(`ALTER TABLE login_users ADD COLUMN is_blocked INTEGER DEFAULT 0`));
-    } catch { /* duplicate column */ }
+    if (!isMySql) {
+        try {
+            await db.run(sql.raw(`ALTER TABLE login_users ADD COLUMN is_blocked INTEGER DEFAULT 0`));
+        } catch { /* duplicate column */ }
+    }
 
     await db.update(loginUsers)
         .set({ isBlocked })

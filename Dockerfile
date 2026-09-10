@@ -35,6 +35,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
 # Drizzle schema + config for migrations
 COPY --from=builder --chown=nextjs:nodejs /app/src/lib/db/schema.ts ./src/lib/db/schema.ts
+COPY --from=builder --chown=nextjs:nodejs /app/src/lib/db/schema.sqlite.ts ./src/lib/db/schema.sqlite.ts
+COPY --from=builder --chown=nextjs:nodejs /app/src/lib/db/schema.mysql.ts ./src/lib/db/schema.mysql.ts
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle.config.ts ./drizzle.config.ts
 
 # node_modules needed for better-sqlite3 native addon + drizzle-kit
@@ -63,6 +65,7 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 ENV DATABASE_PATH="/app/data/ldc-shop.sqlite"
+ENV DB_TYPE="sqlite"
 
 VOLUME ["/app/data"]
 

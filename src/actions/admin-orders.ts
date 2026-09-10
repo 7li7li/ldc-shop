@@ -1,6 +1,6 @@
 'use server'
 
-import { db } from "@/lib/db"
+import { db, isMySql } from "@/lib/db"
 import { cards, orders, refundRequests, loginUsers } from "@/lib/db/schema"
 import { and, eq, sql } from "drizzle-orm"
 import { revalidatePath, updateTag } from "next/cache"
@@ -115,12 +115,14 @@ export async function cancelOrder(orderId: string) {
   }
 
   await db.update(orders).set({ status: 'cancelled' }).where(eq(orders.orderId, orderId))
-  try {
-    await db.run(sql.raw(`ALTER TABLE cards ADD COLUMN reserved_order_id TEXT`));
-  } catch { /* duplicate column */ }
-  try {
-    await db.run(sql.raw(`ALTER TABLE cards ADD COLUMN reserved_at INTEGER`));
-  } catch { /* duplicate column */ }
+  if (!isMySql) {
+    try {
+      await db.run(sql.raw(`ALTER TABLE cards ADD COLUMN reserved_order_id TEXT`));
+    } catch { /* duplicate column */ }
+    try {
+      await db.run(sql.raw(`ALTER TABLE cards ADD COLUMN reserved_at INTEGER`));
+    } catch { /* duplicate column */ }
+  }
   await db.update(cards).set({ reservedOrderId: null, reservedAt: null })
     .where(sql`${cards.reservedOrderId} = ${orderId} AND ${cards.isUsed} = false`)
 
@@ -162,12 +164,14 @@ async function deleteOneOrder(orderId: string) {
   }
 
   // Release reserved card if any
-  try {
-    await db.run(sql.raw(`ALTER TABLE cards ADD COLUMN reserved_order_id TEXT`));
-  } catch { /* duplicate column */ }
-  try {
-    await db.run(sql.raw(`ALTER TABLE cards ADD COLUMN reserved_at INTEGER`));
-  } catch { /* duplicate column */ }
+  if (!isMySql) {
+    try {
+      await db.run(sql.raw(`ALTER TABLE cards ADD COLUMN reserved_order_id TEXT`));
+    } catch { /* duplicate column */ }
+    try {
+      await db.run(sql.raw(`ALTER TABLE cards ADD COLUMN reserved_at INTEGER`));
+    } catch { /* duplicate column */ }
+  }
 
   await db.update(cards).set({ reservedOrderId: null, reservedAt: null })
     .where(sql`${cards.reservedOrderId} = ${orderId} AND ${cards.isUsed} = false`)

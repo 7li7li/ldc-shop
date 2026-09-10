@@ -1,4 +1,4 @@
-import { db, runSqliteScript } from "@/lib/db"
+import { db, isMySql, runSqliteScript } from "@/lib/db"
 import { cards } from "@/lib/db/schema"
 import { desc, sql } from "drizzle-orm"
 import { getProductForAdmin } from "@/lib/db/queries"
@@ -26,11 +26,12 @@ export default async function CardsPage({ params }: { params: Promise<{ id: stri
             error?.cause?.message?.includes('does not exist') ||
             errorString.includes('42P01') || // undefined_table
             errorString.includes('42703') || // undefined_column
-            (errorString.includes('relation') && errorString.includes('does not exist'))
+            (errorString.includes('relation') && errorString.includes('does not exist')) ||
+            errorString.includes('er_no_such_table') || errorString.includes('unknown column')
 
         if (!isTableOrColumnMissing) throw error
 
-        await runSqliteScript(`
+        if (!isMySql) await runSqliteScript(`
             CREATE TABLE IF NOT EXISTS cards (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,

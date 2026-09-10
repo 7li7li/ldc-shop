@@ -127,6 +127,28 @@ done
 prompt PORT "映射端口" "3000"
 
 echo ""
+echo -e "${GREEN}━━━ 数据库配置 ━━━${NC}"
+echo ""
+
+prompt DB_TYPE "数据库类型（sqlite/mysql）" "sqlite"
+DB_TYPE="$(printf '%s' "$DB_TYPE" | tr '[:upper:]' '[:lower:]')"
+while [ "$DB_TYPE" != "sqlite" ] && [ "$DB_TYPE" != "mysql" ]; do
+    echo -e "${RED}数据库类型只能是 sqlite 或 mysql${NC}"
+    prompt DB_TYPE "数据库类型（sqlite/mysql）" "sqlite"
+    DB_TYPE="$(printf '%s' "$DB_TYPE" | tr '[:upper:]' '[:lower:]')"
+done
+
+DATABASE_URL=""
+if [ "$DB_TYPE" = "mysql" ]; then
+    echo -e "${YELLOW}Docker Compose 不包含 MySQL，请填写可从应用容器访问的外部 MySQL 地址。${NC}"
+    prompt DATABASE_URL "MySQL 连接地址（mysql://用户:密码@主机:3306/数据库）" "" true
+    while [ -z "$DATABASE_URL" ]; do
+        echo -e "${RED}使用 MySQL 时连接地址不能为空${NC}"
+        prompt DATABASE_URL "MySQL 连接地址（mysql://用户:密码@主机:3306/数据库）" "" true
+    done
+fi
+
+echo ""
 echo -e "${GREEN}━━━ Linux DO Connect OAuth（必填）━━━${NC}"
 echo -e "${YELLOW}在 https://connect.linux.do 创建应用获取${NC}"
 echo ""
@@ -206,8 +228,10 @@ PAY_URL=${PAY_URL}
 # 管理员
 ADMIN_USERS=${ADMIN_USERS}
 
-# SQLite 数据库
+# 数据库
+DB_TYPE=${DB_TYPE}
 DATABASE_PATH=/app/data/ldc-shop.sqlite
+DATABASE_URL=${DATABASE_URL}
 
 # GitHub OAuth 登录（可选）
 GITHUB_ID=${GITHUB_ID}
@@ -231,6 +255,10 @@ services:
       - ./data:/app/data
     env_file:
       - .env
+    environment:
+      DB_TYPE: \${DB_TYPE:-sqlite}
+      DATABASE_PATH: /app/data/ldc-shop.sqlite
+      DATABASE_URL: \${DATABASE_URL:-}
 EOF
 
 echo -e "${GREEN}✓${NC} docker-compose.yml 已生成"
@@ -245,6 +273,7 @@ echo ""
 echo -e "  站点地址:        ${BOLD}${APP_URL}${NC}"
 echo -e "  映射端口:        ${BOLD}${PORT}${NC}"
 echo -e "  管理员:          ${BOLD}${ADMIN_USERS}${NC}"
+echo -e "  数据库:          ${BOLD}${DB_TYPE}${NC}"
 if [ -n "$GITHUB_ID" ]; then
 echo -e "  GitHub 登录:     ${GREEN}已配置${NC}"
 else

@@ -97,7 +97,7 @@ export default async function AdminOrdersPage(props: {
         usernameByUserId.set(row.userId, row.username)
     }
 
-    const total = countRes[0]?.count || 0
+    const total = Number(countRes[0]?.count || 0)
 
     const productIds: string[] = Array.from(new Set(rows.map((o: any) => o.productId).filter((id: any): id is string => Boolean(id))))
     const productVariantLabels = productIds.length > 0 ? await getProductVariantLabels(productIds) : {}

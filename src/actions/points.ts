@@ -1,7 +1,7 @@
 'use server'
 
 import { auth } from "@/lib/auth"
-import { db } from "@/lib/db"
+import { db, getAffectedRows } from "@/lib/db"
 import { loginUsers } from "@/lib/db/schema"
 import { ensureLoginUsersSchema, getSetting } from "@/lib/db/queries"
 import { and, eq, isNull, lt, or, sql } from "drizzle-orm"
@@ -97,14 +97,15 @@ export async function checkIn(mode?: CheckinMode | string) {
                     lt(loginUsers.lastCheckinAt, new Date(todayStartUtcMs))
                 )
             ))
-            .returning({ consecutiveDays: loginUsers.consecutiveDays });
+            ;
 
-        if (!updated.length) {
+        if (getAffectedRows(updated) < 1) {
             return { success: false, error: "Already checked in today" }
         }
 
         revalidatePath('/')
-        return { success: true, mode: effectiveMode, points: reward, consecutiveDays: updated[0]?.consecutiveDays ?? 1 }
+        const latest = await db.query.loginUsers.findFirst({ where: eq(loginUsers.userId, userId), columns: { consecutiveDays: true } })
+        return { success: true, mode: effectiveMode, points: reward, consecutiveDays: latest?.consecutiveDays ?? 1 }
     } catch (error: any) {
         console.error("Check-in error:", error)
         return { success: false, error: `Check-in failed: ${error?.message || 'Unknown error'}` }

@@ -1,7 +1,7 @@
 import NextAuth from "next-auth"
 import GitHub from "next-auth/providers/github"
 import { sql } from "drizzle-orm"
-import { db } from "@/lib/db"
+import { db, isMySql } from "@/lib/db"
 import { loginUsers } from "@/lib/db/schema"
 
 const githubClientId = process.env.GITHUB_ID || process.env.AUTH_GITHUB_ID
@@ -210,7 +210,7 @@ async function migrateLegacyUserId(sourceUserId: string, targetUserId: string, u
             const createdAt = asTimestampMs(source.createdAt) || Date.now()
             const lastLoginAt = asTimestampMs(source.lastLoginAt) || Date.now()
             await runAuthMigrationStep(sql`
-                INSERT OR IGNORE INTO login_users (
+                ${sql.raw(isMySql ? 'INSERT IGNORE' : 'INSERT OR IGNORE')} INTO login_users (
                     user_id,
                     username,
                     email,
@@ -256,26 +256,46 @@ async function migrateLegacyUserId(sourceUserId: string, targetUserId: string, u
                 .where(sql`${loginUsers.userId} = ${targetUserId}`)
         }
 
-        await runAuthMigrationStep(sql`
-            DELETE FROM broadcast_reads
-            WHERE user_id = ${sourceUserId}
-              AND EXISTS (
-                SELECT 1
-                FROM broadcast_reads br
-                WHERE br.message_id = broadcast_reads.message_id
-                  AND br.user_id = ${targetUserId}
-              )
-        `)
-        await runAuthMigrationStep(sql`
-            DELETE FROM wishlist_votes
-            WHERE user_id = ${sourceUserId}
-              AND EXISTS (
-                SELECT 1
-                FROM wishlist_votes wv
-                WHERE wv.item_id = wishlist_votes.item_id
-                  AND wv.user_id = ${targetUserId}
-              )
-        `)
+        if (isMySql) {
+            // MySQL rejects a DELETE whose subquery reads the target table.
+            await runAuthMigrationStep(sql`
+                DELETE source_row
+                FROM broadcast_reads source_row
+                INNER JOIN broadcast_reads target_row
+                    ON target_row.message_id = source_row.message_id
+                   AND target_row.user_id = ${targetUserId}
+                WHERE source_row.user_id = ${sourceUserId}
+            `)
+            await runAuthMigrationStep(sql`
+                DELETE source_row
+                FROM wishlist_votes source_row
+                INNER JOIN wishlist_votes target_row
+                    ON target_row.item_id = source_row.item_id
+                   AND target_row.user_id = ${targetUserId}
+                WHERE source_row.user_id = ${sourceUserId}
+            `)
+        } else {
+            await runAuthMigrationStep(sql`
+                DELETE FROM broadcast_reads
+                WHERE user_id = ${sourceUserId}
+                  AND EXISTS (
+                    SELECT 1
+                    FROM broadcast_reads br
+                    WHERE br.message_id = broadcast_reads.message_id
+                      AND br.user_id = ${targetUserId}
+                  )
+            `)
+            await runAuthMigrationStep(sql`
+                DELETE FROM wishlist_votes
+                WHERE user_id = ${sourceUserId}
+                  AND EXISTS (
+                    SELECT 1
+                    FROM wishlist_votes wv
+                    WHERE wv.item_id = wishlist_votes.item_id
+                      AND wv.user_id = ${targetUserId}
+                  )
+            `)
+        }
 
         await runAuthMigrationStep(sql`UPDATE orders SET user_id = ${targetUserId} WHERE user_id = ${sourceUserId}`)
         await runAuthMigrationStep(sql`UPDATE reviews SET user_id = ${targetUserId} WHERE user_id = ${sourceUserId}`)

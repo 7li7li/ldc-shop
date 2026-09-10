@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
     // SQLite exports can be several megabytes. The default Server Action
     // request limit is too small for importing a normal shop backup.
     serverActions: {
-      bodySizeLimit: '16mb',
+      bodySizeLimit: '64mb',
     },
   },
   images: {
