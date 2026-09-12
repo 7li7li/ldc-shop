@@ -9,14 +9,19 @@ function normalizeBaseUrl(value: string | undefined | null) {
 function isLocalhostUrl(value: string) {
     try {
         const url = new URL(value)
-        return url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '::1'
+        return url.hostname === 'localhost' ||
+            url.hostname === '127.0.0.1' ||
+            url.hostname === '::1' ||
+            url.hostname === '0.0.0.0'
     } catch {
         return false
     }
 }
 
 export async function resolveSiteBaseUrl() {
-    const configured = normalizeBaseUrl(process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL)
+    // APP_URL is a server-only runtime setting. Prefer it over NEXT_PUBLIC_APP_URL,
+    // which Next.js may have inlined from an older build environment.
+    const configured = normalizeBaseUrl(process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL)
 
     const headerList = await headers()
     const forwardedProto = headerList.get('x-forwarded-proto')?.split(',')[0]?.trim()
